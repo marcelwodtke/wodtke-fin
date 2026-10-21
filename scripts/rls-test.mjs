@@ -13,7 +13,7 @@ if (existsSync(envFile)) for (const line of readFileSync(envFile, 'utf8').split(
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
 }
 const client = new pg.Client({ connectionString: process.env.SUPABASE_DB_URL, ssl: { rejectUnauthorized: false } });
-const TABLES = ['wf_settings', 'wf_tags', 'wf_cards', 'wf_entries'];
+const TABLES = ['wf_settings', 'wf_tags', 'wf_cards', 'wf_entries', 'wf_entry_exceptions'];
 const results = [];
 const expect = (name, pass, detail = '') => results.push({ test: name, result: pass ? 'PASS' : 'FAIL', detail });
 
@@ -54,6 +54,10 @@ try {
   expect('stranger cannot insert rows as the owner', !!r.error, r.error || 'insert succeeded');
   r = await attempt(`update public.wf_settings set start_balance = 999999 where user_id = $1`, [owner]);
   expect('stranger cannot change owner settings', !r.error && r.rowCount === 0, r.error || `${r.rowCount} rows changed`);
+  const ownerEntry = (await client.query('reset role').then(() => client.query(`select id from public.wf_entries where user_id = $1 limit 1`, [owner]))).rows[0].id;
+  await as('authenticated', stranger);
+  r = await attempt(`insert into public.wf_entry_exceptions (entry_id, occurrence_date, action) values ($1, current_date, 'skip')`, [ownerEntry]);
+  expect('stranger cannot skip an owner occurrence', !!r.error, r.error ? r.error.split('\n')[0] : 'insert succeeded');
   await client.query('reset role');
 
   // 2. the owner sees exactly their own data, and cannot point an entry at someone else's card
@@ -62,8 +66,20 @@ try {
     const q = await attempt(`select count(*)::int as n from public.${t}`);
     expect(`owner reads own ${t}`, !q.error && q.rows[0].n === mine[t], q.error || `${q.rows[0].n} of ${mine[t]}`);
   }
+  r = await attempt(`update public.wf_entries set amount = amount + 1, description = 'rls-test' where id = (select id from public.wf_entries limit 1)`);
+  expect('owner can edit own entry', !r.error && r.rowCount === 1, r.error || `${r.rowCount} rows changed`);
+  r = await attempt(`update public.wf_entries set user_id = $1 where id = (select id from public.wf_entries limit 1)`, [randomUUID()]);
+  expect('owner cannot hand an entry to another user', !!r.error, r.error ? r.error.split('\n')[0] : 'update succeeded');
   r = await attempt(`insert into public.wf_entries (type, amount, date, card_id) values ('card', 10, current_date, $1)`, [randomUUID()]);
   expect('owner cannot reference a card that is not theirs', !!r.error, r.error ? r.error.split('\n')[0] : 'insert succeeded');
+  r = await attempt(`insert into public.wf_entry_exceptions (entry_id, occurrence_date, action, amount) values ($1, current_date, 'modify', 123.45)`, [ownerEntry]);
+  expect('owner can adjust one occurrence', !r.error && r.rowCount === 1, r.error || `${r.rowCount} rows`);
+  r = await attempt(`insert into public.wf_entry_exceptions (entry_id, occurrence_date, action) values ($1, current_date, 'skip')`, [randomUUID()]);
+  expect('owner cannot add exceptions to entries that are not theirs', !!r.error, r.error ? r.error.split('\n')[0] : 'insert succeeded');
+  r = await attempt(`insert into public.wf_entry_exceptions (entry_id, occurrence_date, action) values ($1, current_date + 1, 'modify')`, [ownerEntry]);
+  expect('database rejects an empty modification', !!r.error, r.error ? r.error.split('\n')[0] : 'insert succeeded');
+  r = await attempt(`update public.wf_entries set end_date = date - 1 where id = $1`, [ownerEntry]);
+  expect('database rejects a series ending before it starts', !!r.error, r.error ? r.error.split('\n')[0] : 'update succeeded');
   r = await attempt(`insert into public.wf_entries (type, amount, date) values ('out', -5, current_date)`);
   expect('database rejects invalid amounts', !!r.error, r.error ? r.error.split('\n')[0] : 'insert succeeded');
   await client.query('reset role');

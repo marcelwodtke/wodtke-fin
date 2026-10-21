@@ -48,7 +48,7 @@ function sampleState() {
   return {
     startBalance: 4200, startDate: d(1), theme: 'system',
     budget: { monthly: 3000, divisor: 'month' },
-    tags, cards,
+    tags, cards, exceptions: [],
     entries: [
       e('in', 12000, 'Salário', d(15), 'monthly'),
       e('in', 3500, 'Projeto freelance', d(28), 'monthly'),
@@ -78,9 +78,11 @@ const DEFAULT_TAGS = [['Moradia', '#2563eb'], ['Educação', '#7c5cff'], ['Trans
 // The theme is also kept locally so the login screen opens in the right colors.
 const localTheme = () => { try { return localStorage.getItem(KEY + ':theme') || 'system'; } catch (_) { return 'system'; } };
 const rememberTheme = t => { try { localStorage.setItem(KEY + ':theme', t); } catch (_) {} };
-const emptyState = () => ({ startBalance: 0, startDate: iso(monthDate(today().getFullYear(), today().getMonth(), 1)), theme: localTheme(), budget: { monthly: 0, divisor: 'month' }, tags: [], cards: [], entries: [] });
+const emptyState = () => ({ startBalance: 0, startDate: iso(monthDate(today().getFullYear(), today().getMonth(), 1)), theme: localTheme(), budget: { monthly: 0, divisor: 'month' }, tags: [], cards: [], entries: [], exceptions: [] });
 
-const fromEntry = r => ({ id: r.id, type: r.type, amount: +r.amount, desc: r.description || '', date: r.date, repeat: r.repeat, count: r.installments || 1, tagId: r.tag_id || '', cardId: r.card_id || '' });
+const fromEntry = r => ({ id: r.id, type: r.type, amount: +r.amount, desc: r.description || '', date: r.date, endDate: r.end_date || '', repeat: r.repeat, count: r.installments || 1, tagId: r.tag_id || '', cardId: r.card_id || '' });
+// od = the date the occurrence originally fell on; amount/date/desc are optional overrides
+const fromException = r => ({ id: r.id, entryId: r.entry_id, od: r.occurrence_date, action: r.action, amount: r.amount == null ? null : +r.amount, date: r.date || '', desc: r.description });
 const toEntry = e => ({ type: e.type, amount: e.amount, description: e.desc || '', date: e.date, repeat: e.repeat, installments: e.repeat === 'installments' ? e.count : 1, tag_id: e.tagId || null, card_id: e.type === 'card' ? e.cardId : null });
 const fromTag = r => ({ id: r.id, name: r.name, color: r.color });
 const fromCard = r => ({ id: r.id, name: r.name, close: r.close_day, due: r.due_day });
@@ -88,11 +90,12 @@ const fromCard = r => ({ id: r.id, name: r.name, close: r.close_day, due: r.due_
 async function must(query) { const { data, error } = await query; if (error) throw error; return data; }
 
 async function loadAll() {
-  let [settings, tags, cards, entries] = await Promise.all([
+  let [settings, tags, cards, entries, exceptions] = await Promise.all([
     must(sb.from('wf_settings').select('*').maybeSingle()),
     must(sb.from('wf_tags').select('*').order('name')),
     must(sb.from('wf_cards').select('*').order('name')),
     must(sb.from('wf_entries').select('*').order('date')),
+    must(sb.from('wf_entry_exceptions').select('*')),
   ]);
   if (!settings) { // first sign-in: create the settings row and starter categories
     settings = await must(sb.from('wf_settings').insert({ start_date: emptyState().startDate, theme: localTheme() }).select().single());
@@ -101,7 +104,7 @@ async function loadAll() {
   state = {
     startBalance: +settings.start_balance, startDate: settings.start_date, theme: settings.theme,
     budget: { monthly: +settings.budget_monthly, divisor: settings.budget_divisor },
-    tags: tags.map(fromTag), cards: cards.map(fromCard), entries: entries.map(fromEntry),
+    tags: tags.map(fromTag), cards: cards.map(fromCard), entries: entries.map(fromEntry), exceptions: exceptions.map(fromException),
   };
   rememberTheme(state.theme);
 }
@@ -109,12 +112,40 @@ async function loadAll() {
 const db = {
   settings: patch => must(sb.from('wf_settings').update(patch).eq('user_id', user.id)),
   addEntry: async e => { const r = await must(sb.from('wf_entries').insert(toEntry(e)).select().single()); state.entries.push(fromEntry(r)); },
-  delEntry: async id => { await must(sb.from('wf_entries').delete().eq('id', id)); state.entries = state.entries.filter(x => x.id !== id); },
+  updateEntry: async (id, e) => {
+    const r = await must(sb.from('wf_entries').update(toEntry(e)).eq('id', id).select().single());
+    state.entries = state.entries.map(x => (x.id === id ? fromEntry(r) : x));
+  },
+  delEntry: async id => { await must(sb.from('wf_entries').delete().eq('id', id)); state.entries = state.entries.filter(x => x.id !== id); pruneExceptions(); },
+  // one changed or skipped occurrence of a recurring entry
+  setException: async x => {
+    const row = { entry_id: x.entryId, occurrence_date: x.od, action: x.action,
+      amount: x.action === 'modify' ? x.amount ?? null : null, date: x.action === 'modify' ? x.date || null : null, description: x.action === 'modify' ? x.desc ?? null : null };
+    const r = await must(sb.from('wf_entry_exceptions').upsert(row, { onConflict: 'entry_id,occurrence_date' }).select().single());
+    state.exceptions = state.exceptions.filter(e => !(e.entryId === x.entryId && e.od === x.od)).concat(fromException(r));
+  },
+  clearException: async (entryId, od) => {
+    await must(sb.from('wf_entry_exceptions').delete().eq('entry_id', entryId).eq('occurrence_date', od));
+    state.exceptions = state.exceptions.filter(e => !(e.entryId === entryId && e.od === od));
+  },
+  // stop a series after endDate (exceptions past it no longer apply, so drop them)
+  endSeries: async (id, endDate) => {
+    const r = await must(sb.from('wf_entries').update({ end_date: endDate }).eq('id', id).select().single());
+    await must(sb.from('wf_entry_exceptions').delete().eq('entry_id', id).gt('occurrence_date', endDate));
+    state.entries = state.entries.map(x => (x.id === id ? fromEntry(r) : x));
+    state.exceptions = state.exceptions.filter(e => !(e.entryId === id && e.od > endDate));
+  },
+  // "this and the following": end the old series the day before `od` and start a new one there
+  splitSeries: async (entry, od, next) => {
+    if (od <= entry.date) return db.updateEntry(entry.id, next);
+    await db.endSeries(entry.id, iso(addDays(parse(od), -1)));
+    await db.addEntry(next);
+  },
   addTag: async t => { const r = await must(sb.from('wf_tags').insert({ name: t.name, color: t.color }).select().single()); state.tags.push(fromTag(r)); },
   delTag: async id => { await must(sb.from('wf_tags').delete().eq('id', id)); state.tags = state.tags.filter(t => t.id !== id); state.entries.forEach(x => { if (x.tagId === id) x.tagId = ''; }); },
   addCard: async c => { const r = await must(sb.from('wf_cards').insert({ name: c.name, close_day: c.close, due_day: c.due }).select().single()); state.cards.push(fromCard(r)); },
-  delCard: async id => { await must(sb.from('wf_cards').delete().eq('id', id)); state.cards = state.cards.filter(c => c.id !== id); state.entries = state.entries.filter(x => x.cardId !== id); },
-  wipe: async () => { await must(sb.from('wf_entries').delete().eq('user_id', user.id)); state.entries = []; },
+  delCard: async id => { await must(sb.from('wf_cards').delete().eq('id', id)); state.cards = state.cards.filter(c => c.id !== id); state.entries = state.entries.filter(x => x.cardId !== id); pruneExceptions(); },
+  wipe: async () => { await must(sb.from('wf_entries').delete().eq('user_id', user.id)); state.entries = []; state.exceptions = []; },
   // replace everything with the sample data set, remapping its local ids to database ids
   seedSample: async () => {
     const s = sampleState();
@@ -131,6 +162,9 @@ const db = {
   },
 };
 
+// the database cascades exception deletes; mirror that locally
+function pruneExceptions() { const ids = new Set(state.entries.map(e => e.id)); state.exceptions = state.exceptions.filter(x => ids.has(x.entryId)); }
+
 // Runs a database change, reports failures, then re-renders.
 async function run(fn, okMsg) {
   try { await fn(); if (okMsg) toast(okMsg); }
@@ -144,8 +178,9 @@ let view = { y: today().getFullYear(), m: today().getMonth() }; // first month o
 let focus = { y: today().getFullYear(), m: today().getMonth() };   // month used by resumo/categorias
 
 // ---------- projection engine ----------
-function occurrences(e, end) {
+function occurrences(e, until) {
   const out = [], start = parse(e.date), amt = +e.amount || 0;
+  const end = e.endDate && parse(e.endDate) < until ? parse(e.endDate) : until; // a split series stops at its end date
   if (e.repeat === 'daily' || e.repeat === 'weekly') {
     const step = e.repeat === 'daily' ? 1 : 7;
     for (let d = start; d <= end; d = addDays(d, step)) out.push({ d, amt });
@@ -170,29 +205,40 @@ function dailyBudget(d) {
   const b = state.budget, div = b.divisor === 'month' ? daysIn(d.getFullYear(), d.getMonth()) : +b.divisor;
   return div > 0 ? (+b.monthly || 0) / div : 0;
 }
+const emptyDay = () => ({ in: 0, out: 0, daily: 0, save: 0, card: 0, items: [], skipped: [] });
 function buildLedger(end) {
-  const L = new Map();
+  const L = new Map(), day = k => (L.has(k) ? L.get(k) : L.set(k, emptyDay()).get(k));
+  const ex = new Map((state.exceptions || []).map(x => [x.entryId + '|' + x.od, x]));
+  // an occurrence moved earlier can land before `end` even though it originally fell after it
+  const ahead = Math.max(0, ...(state.exceptions || []).filter(x => x.date && x.date < x.od).map(x => Math.ceil((parse(x.od) - parse(x.date)) / 864e5)));
   for (const e of state.entries) {
     const card = e.type === 'card' ? state.cards.find(c => c.id === e.cardId) : null;
-    for (const o of occurrences(e, end)) {
-      const when = card ? invoiceDue(o.d, card) : o.d;
+    for (const o of occurrences(e, addDays(end, ahead))) {
+      const od = iso(o.d), x = ex.get(e.id + '|' + od);
+      // skipped occurrences are listed on their day (so they can be restored) but not counted
+      if (x && x.action === 'skip') { const k = iso(card ? invoiceDue(o.d, card) : o.d); if (parse(k) <= end) day(k).skipped.push({ e, od, amt: o.amt, i: o.i, n: o.n }); continue; }
+      const d = x && x.date ? parse(x.date) : o.d, amt = x && x.amount != null ? x.amount : o.amt;
+      const when = card ? invoiceDue(d, card) : d;
       if (when > end) continue;
-      const k = iso(when);
-      if (!L.has(k)) L.set(k, { in: 0, out: 0, daily: 0, save: 0, card: 0, items: [] });
-      const b = L.get(k); b[e.type] += o.amt; b.items.push({ e, amt: o.amt, i: o.i, n: o.n, purchase: o.d, card });
+      const b = day(iso(when)); b[e.type] += amt;
+      b.items.push({ e, amt, i: o.i, n: o.n, purchase: d, card, od, ex: x || null, desc: (x && x.desc) || e.desc });
     }
   }
   return L;
 }
+// the default amount of one occurrence (installments split the total), ignoring exceptions
+function baseAmount(e, od) { const o = occurrences(e, parse(od)).find(o => iso(o.d) === od); return o ? o.amt : +e.amount; }
+// 1-based position of an occurrence inside its series
+function occurrenceIndex(e, od) { return occurrences(e, parse(od)).findIndex(o => iso(o.d) === od) + 1; }
 function computeRows(end) {
   const L = buildLedger(end), t = today(), rows = [];
   let bal = +state.startBalance || 0;
   for (let d = parse(state.startDate); d <= end; d = addDays(d, 1)) {
-    const k = iso(d), b = L.get(k) || { in: 0, out: 0, daily: 0, save: 0, card: 0, items: [] };
+    const k = iso(d), b = L.get(k) || emptyDay();
     const budget = d > t ? dailyBudget(d) : 0;
     const daily = b.daily + budget;
     bal += b.in - b.out - daily - b.save - b.card;
-    rows.push({ d, k, in: b.in, out: b.out, daily, budget, save: b.save, card: b.card, bal, items: b.items });
+    rows.push({ d, k, in: b.in, out: b.out, daily, budget, save: b.save, card: b.card, bal, items: b.items, skipped: b.skipped });
   }
   return rows;
 }
@@ -327,7 +373,7 @@ function renderSummary() {
         <div class="row"><div class="grow">Orçamento diário previsto<div class="sub">${money(dailyBudget(mr[0].d))} por dia nos dias futuros</div></div><b class="num">${money(sum(mr, 'budget'))}</b></div>
       </div>
       <h3 style="margin-top:18px">Próximos lançamentos</h3>
-      <div class="rows">${upcoming.length ? upcoming.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow">${esc(x.e.desc || TYPES[x.e.type].label)}<div class="sub">${x.d.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num">${money(x.amt)}</b></div>`).join('') : '<div class="empty-state">Nada agendado.</div>'}</div>
+      <div class="rows">${upcoming.length ? upcoming.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow">${esc(x.desc || TYPES[x.e.type].label)}<div class="sub">${x.d.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num">${money(x.amt)}</b></div>`).join('') : '<div class="empty-state">Nada agendado.</div>'}</div>
     </div>
   </div>`;
 }
@@ -401,11 +447,16 @@ function closeModal() { overlay.classList.remove('open'); }
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-function openEntry(date) {
-  let type = 'out';
+// Opens the entry form; pass `existing` to edit an entry (and its whole series) instead of creating one,
+// and `opts.from` to change the series only from that occurrence on (the earlier ones keep the old values).
+function openEntry(date, existing, opts = {}) {
+  let type = existing ? existing.type : 'out';
+  const series = existing && existing.repeat !== 'none';
+  const from = series && opts.from && opts.from > existing.date ? opts.from : null;
+  const fromLabel = from && parse(from).toLocaleDateString('pt-BR');
   const draw = () => {
     const isCard = type === 'card';
-    openModal(`<div class="modal-head"><h2>Novo lançamento</h2><button class="icon-btn" data-act="close">✕</button></div>
+    openModal(`<div class="modal-head"><h2>${from ? `Alterar a partir de ${fromLabel}` : existing ? 'Editar lançamento' : 'Novo lançamento'}</h2><button class="icon-btn" data-act="close">✕</button></div>
     <div class="modal-body">
       <div class="seg">${Object.entries(TYPES).map(([k, t]) => `<button class="${k === type ? 'on' : ''}" data-act="type" data-v="${k}"><span class="sw" style="background:${t.color}"></span>${t.label}</button>`).join('')}</div>
       <div class="field"><label>Valor (R$)</label><input id="fAmt" class="amount-input" type="number" step="0.01" min="0" placeholder="0,00" value="${draw.amt ?? ''}"></div>
@@ -413,16 +464,30 @@ function openEntry(date) {
       <div class="inline"><div class="field"><label>${isCard ? 'Data da compra' : 'Data'}</label><input id="fDate" type="date" value="${draw.date ?? date ?? iso(today())}"></div>
         <div class="field"><label>Repetição</label><select id="fRep">${Object.entries(REPEATS).map(([k, l]) => `<option value="${k}" ${k === (draw.rep ?? 'none') ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <div class="field" id="fCountWrap" style="display:${(draw.rep ?? 'none') === 'installments' ? 'flex' : 'none'}"><label>Número de parcelas (o valor é dividido)</label><input id="fCount" type="number" min="2" max="120" value="${draw.count ?? 3}"></div>
-      <div class="inline">${isCard ? `<div class="field"><label>Cartão</label><select id="fCard">${state.cards.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>` : ''}
-        <div class="field"><label>Categoria</label><select id="fTag"><option value="">Sem categoria</option>${state.tags.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div></div>
+      <div class="inline">${isCard ? `<div class="field"><label>Cartão</label><select id="fCard">${state.cards.map(c => `<option value="${c.id}" ${c.id === draw.card ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : ''}
+        <div class="field"><label>Categoria</label><select id="fTag"><option value="">Sem categoria</option>${state.tags.map(t => `<option value="${t.id}" ${t.id === draw.tag ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
       ${isCard && !state.cards.length ? '<p class="hint neg">Cadastre um cartão em Ajustes primeiro.</p>' : ''}
+      ${from ? `<p class="hint" style="margin:4px 0 0">↻ As ocorrências até ${parse(iso(addDays(parse(from), -1))).toLocaleDateString('pt-BR')} ficam como estão. A partir de <b>${fromLabel}</b> vale o que você definir aqui.</p>`
+        : series ? `<p class="hint" style="margin:4px 0 0">↻ Este lançamento se repete (${REPEATS[existing.repeat].toLowerCase()}). A alteração vale para <b>todas as ocorrências</b>, inclusive as passadas.</p>` : ''}
     </div>
-    <div class="modal-foot"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveEntry">Salvar ${TYPES[type].label.toLowerCase()}</button></div>`);
+    <div class="modal-foot">${existing && !from ? `<button class="btn danger" data-act="delEntry" data-id="${existing.id}" style="margin-right:auto">Excluir${series ? ' série' : ''}</button>` : ''}<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveEntry">${existing ? 'Salvar alterações' : `Salvar ${TYPES[type].label.toLowerCase()}`}</button></div>`);
     modal.querySelector('#fRep').addEventListener('change', e => { modal.querySelector('#fCountWrap').style.display = e.target.value === 'installments' ? 'flex' : 'none'; });
     setTimeout(() => modal.querySelector('#fAmt').focus(), 30);
   };
-  const keep = () => { draw.amt = modal.querySelector('#fAmt').value; draw.desc = modal.querySelector('#fDesc').value; draw.date = modal.querySelector('#fDate').value; draw.rep = modal.querySelector('#fRep').value; draw.count = modal.querySelector('#fCount').value; };
-  Object.assign(draw, { amt: undefined, desc: undefined, date: undefined, rep: undefined, count: undefined });
+  const keep = () => {
+    draw.amt = modal.querySelector('#fAmt').value; draw.desc = modal.querySelector('#fDesc').value; draw.date = modal.querySelector('#fDate').value;
+    draw.rep = modal.querySelector('#fRep').value; draw.count = modal.querySelector('#fCount').value;
+    draw.tag = modal.querySelector('#fTag').value; draw.card = modal.querySelector('#fCard')?.value ?? draw.card;
+  };
+  // installments store the total, so the form shows the total amount back when editing;
+  // from an occurrence on, it shows only what is left of the series
+  let prefill = existing && { amt: existing.amount, desc: existing.desc, date: existing.date, rep: existing.repeat, count: existing.count > 1 ? existing.count : 3, tag: existing.tagId, card: existing.cardId };
+  if (from && existing.repeat === 'installments') {
+    const left = existing.count - occurrenceIndex(existing, from) + 1, per = existing.amount / existing.count;
+    prefill = { ...prefill, amt: Math.round(per * left * 100) / 100, count: left, rep: left > 1 ? 'installments' : 'none' };
+  }
+  if (from) prefill.date = from;
+  Object.assign(draw, prefill || { amt: undefined, desc: undefined, date: undefined, rep: undefined, count: undefined, tag: '', card: undefined });
   openEntry.setType = v => { keep(); type = v; draw(); };
   openEntry.submit = () => {
     const amount = parseFloat(modal.querySelector('#fAmt').value), d = modal.querySelector('#fDate').value;
@@ -433,7 +498,9 @@ function openEntry(date) {
     if (type === 'card' && !entry.cardId) return toast('Cadastre um cartão primeiro');
     if (entry.desc.length > 200) return toast('Descrição muito longa (máx. 200)');
     const btn = modal.querySelector('[data-act=saveEntry]'); btn.disabled = true;
-    run(async () => { await db.addEntry(entry); closeModal(); }, 'Lançamento salvo').finally(() => { btn.disabled = false; });
+    if (from && d < from) return toast(`A nova data não pode ser antes de ${fromLabel}`);
+    const save = from ? () => db.splitSeries(existing, from, entry) : existing ? () => db.updateEntry(existing.id, entry) : () => db.addEntry(entry);
+    run(async () => { await save(); closeModal(); }, from ? `Alterado a partir de ${fromLabel}` : existing ? 'Alterações salvas' : 'Lançamento salvo').finally(() => { btn.disabled = false; });
   };
   draw();
 }
@@ -442,13 +509,76 @@ function openDay(k) {
   const rows = computeRows(parse(k)), r = rows.find(x => x.k === k);
   if (!r) return toast('Data anterior ao ponto de partida');
   const tagName = id => state.tags.find(t => t.id === id)?.name;
-  const items = r.items.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.e.desc || TYPES[x.e.type].label)}</b>
-    <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}</div></div>
-    <b class="num ${x.e.type === 'in' ? '' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Excluir${x.e.repeat !== 'none' ? ' a série inteira' : ''}" data-act="delEntry" data-id="${x.e.id}">🗑</button></div>`).join('');
+  const exNote = x => {
+    if (!x.ex) return '';
+    const parts = [];
+    if (x.ex.amount != null) parts.push(`valor ajustado (padrão ${money(baseAmount(x.e, x.od))})`);
+    if (x.ex.date) parts.push(`movido de ${parse(x.od).toLocaleDateString('pt-BR')}`);
+    if (x.ex.desc != null) parts.push('descrição ajustada');
+    return ` · <span style="color:var(--primary);font-weight:700">✎ ${parts.join(', ')}</span>`;
+  };
+  const items = r.items.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
+    <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}${exNote(x)}</div></div>
+    <b class="num ${x.e.type === 'in' ? '' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">✏️</button><button class="icon-btn" title="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">🗑</button></div>`).join('');
+  const skipped = (r.skipped || []).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
+    <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
   openModal(`<div class="modal-head"><h2 style="text-transform:capitalize">${r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2><button class="icon-btn" data-act="close">✕</button></div>
-  <div class="modal-body"><div class="rows">${items}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
+  <div class="modal-body"><div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${r.bal < 0 ? 'neg' : ''}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
+}
+
+// For a recurring entry, ask whether a change applies to one occurrence, the rest of the series, or all of it.
+function openSeriesChoice(mode, e, od) {
+  const when = parse(od).toLocaleDateString('pt-BR'), first = od <= e.date;
+  const opts = mode === 'edit'
+    ? [['one', 'Só esta ocorrência', `Muda valor, data ou descrição apenas em ${when}.`],
+       ['next', 'Esta e as próximas', first ? 'É a primeira ocorrência, então vale para a série toda.' : `As ocorrências antes de ${when} ficam como estão.`],
+       ['all', 'Toda a série', 'Altera todas as ocorrências, inclusive as passadas.']]
+    : [['one', 'Pular só esta', `Remove apenas a ocorrência de ${when}. Dá para restaurar depois.`],
+       ['next', 'Esta e as próximas', first ? 'É a primeira ocorrência, então exclui a série toda.' : `A série termina antes de ${when}; o histórico anterior fica.`],
+       ['all', 'Excluir a série inteira', 'Apaga todas as ocorrências, inclusive as passadas.']];
+  openModal(`<div class="modal-head"><h2>${mode === 'edit' ? 'Editar' : 'Excluir'} lançamento que se repete</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body"><p class="hint" style="margin:0 0 12px"><b>${esc(e.desc || TYPES[e.type].label)}</b> · ${REPEATS[e.repeat].toLowerCase()}</p>
+    <div class="rows">${opts.map(([v, l, h]) => `<div class="row" data-choice="${v}" style="cursor:pointer"><div class="grow"><b class="${mode === 'delete' && v === 'all' ? 'neg' : ''}">${l}</b><div class="sub">${h}</div></div><span style="color:var(--muted)">›</span></div>`).join('')}</div></div>`);
+  modal.querySelectorAll('[data-choice]').forEach(el => el.addEventListener('click', () => {
+    const v = el.dataset.choice;
+    if (mode === 'edit') {
+      if (v === 'one') openOccurrence(e, od);
+      else if (v === 'next') openEntry(null, e, { from: od });
+      else openEntry(null, e);
+    } else if (v === 'one') { closeModal(); run(() => db.setException({ entryId: e.id, od, action: 'skip' }), 'Ocorrência pulada'); }
+    else if (v === 'next' && !first) { closeModal(); run(() => db.endSeries(e.id, iso(addDays(parse(od), -1))), 'Série encerrada antes desta data'); }
+    else if (confirm(`Excluir "${e.desc || TYPES[e.type].label}" e todas as ocorrências?`)) { closeModal(); run(() => db.delEntry(e.id), 'Série excluída'); }
+  }));
+}
+
+// Change or skip a single occurrence of a series.
+function openOccurrence(e, od) {
+  const x = state.exceptions.find(v => v.entryId === e.id && v.od === od && v.action === 'modify');
+  const base = baseAmount(e, od), idx = occurrenceIndex(e, od);
+  openModal(`<div class="modal-head"><h2>Só esta ocorrência</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body">
+    <p class="hint" style="margin:0 0 12px"><b>${esc(e.desc || TYPES[e.type].label)}</b> de ${parse(od).toLocaleDateString('pt-BR')}${e.repeat === 'installments' ? ` · parcela ${idx}/${e.count}` : ''}. O resto da série não muda.</p>
+    <div class="field"><label>Valor desta vez (R$) · padrão ${money(base)}</label><input id="oAmt" class="amount-input" type="number" step="0.01" min="0" value="${x && x.amount != null ? x.amount : Math.round(base * 100) / 100}"></div>
+    <div class="field"><label>${e.type === 'card' ? 'Data da compra' : 'Data'} desta vez</label><input id="oDate" type="date" value="${(x && x.date) || od}"></div>
+    <div class="field"><label>Descrição desta vez</label><input id="oDesc" value="${esc(x && x.desc != null ? x.desc : e.desc)}"></div>
+  </div>
+  <div class="modal-foot"><button class="btn danger" id="oSkip" style="margin-right:auto">Pular esta vez</button>${x ? '<button class="btn" id="oReset">Voltar ao padrão</button>' : ''}<button class="btn primary" id="oSave">Salvar</button></div>`);
+  modal.querySelector('#oSkip').addEventListener('click', () => { closeModal(); run(() => db.setException({ entryId: e.id, od, action: 'skip' }), 'Ocorrência pulada'); });
+  modal.querySelector('#oReset')?.addEventListener('click', () => { closeModal(); run(() => db.clearException(e.id, od), 'Ocorrência voltou ao padrão'); });
+  modal.querySelector('#oSave').addEventListener('click', () => {
+    const amount = parseFloat(modal.querySelector('#oAmt').value), date = modal.querySelector('#oDate').value, desc = modal.querySelector('#oDesc').value.trim();
+    if (!(amount > 0)) return toast('Informe um valor maior que zero');
+    if (!date) return toast('Informe a data');
+    if (desc.length > 200) return toast('Descrição muito longa (máx. 200)');
+    // keep only what differs from the series, so later edits to the series still flow through
+    const patch = { amount: Math.abs(amount - base) >= 0.005 ? amount : null, date: date !== od ? date : '', desc: desc !== e.desc ? desc : null };
+    closeModal();
+    if (patch.amount == null && !patch.date && patch.desc == null) return x ? run(() => db.clearException(e.id, od), 'Ocorrência voltou ao padrão') : undefined;
+    run(() => db.setException({ entryId: e.id, od, action: 'modify', ...patch }), 'Ocorrência ajustada');
+  });
+  setTimeout(() => modal.querySelector('#oAmt').focus(), 30);
 }
 
 // ---------- events ----------
@@ -471,6 +601,15 @@ document.addEventListener('click', e => {
     case 'type': openEntry.setType(a.dataset.v); break;
     case 'saveEntry': openEntry.submit(); break;
     case 'addOn': openEntry(a.dataset.day); break;
+    case 'editEntry': { const en = state.entries.find(x => x.id === a.dataset.id); if (en) openEntry(null, en); break; }
+    case 'editOcc': case 'delOcc': {
+      const en = state.entries.find(x => x.id === a.dataset.id); if (!en) break;
+      if (en.repeat !== 'none') { openSeriesChoice(act === 'editOcc' ? 'edit' : 'delete', en, a.dataset.od); break; }
+      if (act === 'editOcc') openEntry(null, en);
+      else if (confirm(`Excluir "${en.desc || TYPES[en.type].label}"?`)) { closeModal(); run(() => db.delEntry(en.id), 'Excluído'); }
+      break;
+    }
+    case 'restoreOcc': closeModal(); run(() => db.clearException(a.dataset.id, a.dataset.od), 'Ocorrência restaurada'); break;
     case 'delEntry': {
       const en = state.entries.find(x => x.id === a.dataset.id);
       if (en && confirm(en.repeat !== 'none' ? `Excluir "${en.desc || TYPES[en.type].label}" e todas as repetições?` : `Excluir "${en.desc || TYPES[en.type].label}"?`)) {
