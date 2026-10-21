@@ -1,0 +1,13 @@
+{
+  "name": "wodtke-financas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:migrate": "node scripts/db.mjs migrate",
+    "db:check": "node scripts/db.mjs check",
+    "db:test-rls": "node scripts/rls-test.mjs"
+  },
+  "devDependencies": {
+    "pg": "8.13.1"
+  }
+}

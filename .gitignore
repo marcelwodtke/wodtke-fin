@@ -1,0 +1,10 @@
+# secrets: never commit
+.env
+.env.*
+!.env.example
+
+node_modules/
+.vercel/
+
+# leftover from an interrupted clone, not part of the app
+rea/
