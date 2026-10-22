@@ -4,12 +4,8 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 const money = v => brl.format(Math.abs(v) < 0.005 ? 0 : v);
 // colour class for a signed balance/result: green when positive, red when negative, plain at zero
 const tone = v => (v <= -0.005 ? 'neg' : v >= 0.005 ? 'pos' : '');
-const compact = v => {
-  const a = Math.abs(v), s = v < 0 ? '-' : '';
-  if (a >= 1e6) return s + (a / 1e6).toFixed(1).replace('.', ',') + 'M';
-  if (a >= 1e3) return s + (a / 1e3).toFixed(1).replace('.', ',') + 'k';
-  return s + Math.round(a);
-};
+// background level for a balance cell: light up to R$ 1.000, strong beyond; none at zero
+const level = v => { const a = Math.abs(v); return a < 0.005 ? '' : (v < 0 ? 'lv-neg' : 'lv-pos') + (a > 1000 ? '2' : '1'); };
 const pad = n => String(n).padStart(2, '0');
 const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
@@ -297,7 +293,12 @@ function clampView() {
 
 // ---------- rendering ----------
 const $view = document.getElementById('view');
-const cell = v => (Math.abs(v) < 0.005 ? '<td class="num zero">—</td>' : `<td class="num">${money(v)}</td>`);
+
+// a value cell of the web table: the type's colour dot on the left (faded when empty), the amount on the right
+const cell = (v, k) => {
+  const has = Math.abs(v) >= 0.005;
+  return `<td class="num${has ? '' : ' zero'}"><div class="cv${has ? ' has' : ''}" style="--c:${TYPES[k].color}"><span class="tdot"></span><span>${money(has ? v : 0)}</span></div></td>`;
+};
 const dot = t => `<span class="dot" style="background:${TYPES[t].color}"></span>`;
 
 function rangeControl(label) {
@@ -334,9 +335,9 @@ function renderFlow() {
     <div class="scroll"><table class="flow"><thead><tr><th>Dia</th>${['in', 'out', 'daily', 'save', 'card'].map(k => `<th>${dot(k)}${TYPES[k].plural}</th>`).join('')}<th>Saldo</th></tr></thead><tbody>`;
     for (const r of mr) {
       const wk = [0, 6].includes(r.d.getDay());
-      html += `<tr data-day="${r.k}" class="${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}"><td class="day">${r.d.getDate()}<span>${weekday(r.d)}</span></td>
-        ${cell(r.in)}${cell(r.out)}${cell(r.daily).replace('<td class="num', `<td class="num${r.budget && !r.items.some(x => x.e.type === 'daily') ? ' forecast' : ''}`)}${cell(r.save)}${cell(r.card)}
-        <td class="num bal ${tone(r.bal)}">${money(r.bal)}</td></tr>`;
+      html += `<tr data-day="${r.k}" class="${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}"><td class="day"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></td>
+        ${cell(r.in, 'in')}${cell(r.out, 'out')}${cell(r.daily, 'daily').replace('<td class="num', `<td class="num${r.budget && !r.items.some(x => x.e.type === 'daily') ? ' forecast' : ''}`)}${cell(r.save, 'save')}${cell(r.card, 'card')}
+        <td class="num bal ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</td></tr>`;
     }
     html += `</tbody><tfoot><tr><td>Total</td>${['in', 'out', 'daily', 'save', 'card'].map(k => `<td class="num">${money(sum(mr, k))}</td>`).join('')}<td></td></tr></tfoot></table></div>`;
     html += `</section>`;
@@ -352,19 +353,28 @@ function dayListHtml(mr, t, type) {
     const wk = [0, 6].includes(r.d.getDay()), v = r[type];
     const fc = type === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
     const has = Math.abs(v) >= 0.005;
-    const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : '<span class="none">—</span>';
+    const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : `<span class="tval zero">${money(0)}</span>`;
     return `<div class="drow ${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}" data-day="${r.k}"><div class="dd"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></div>
-      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="tdot"></span>${amount}</div><div class="db num ${tone(r.bal)}">${money(r.bal)}</div></div>`;
+      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="tdot"></span>${amount}</div><div class="db num ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</div></div>`;
   }).join('');
 }
 
-// Which movement type the phone list shows; remembered on this device.
+// Fluxo list column header: Dia | type selector | Saldo (a native select keeps the picker accessible)
+function flowListHead() {
+  return `<div class="list-head"><span>Dia</span>
+    <label class="type-pick" style="--c:${TYPES[phoneType].color}"><span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <select data-ptype aria-label="Tipo de lançamento">${FLOW_KEYS.map(k => `<option value="${k}" ${k === phoneType ? 'selected' : ''}>${TYPES[k].plural}</option>`).join('')}</select></label>
+    <span>Saldo</span></div>`;
+}
+
+// Which movement type the Fluxo list shows; remembered on this device.
 let phoneType = (() => { try { const v = localStorage.getItem(KEY + ':phoneType'); return FLOW_KEYS.includes(v) ? v : 'in'; } catch (_) { return 'in'; } })();
 function setPhoneType(type) {
   if (!FLOW_KEYS.includes(type) || type === phoneType) return;
   phoneType = type;
   try { localStorage.setItem(KEY + ':phoneType', type); } catch (_) {}
-  const y = window.scrollY; renderFlowPhone(); window.scrollTo(0, y); // keep the same days in view
+  const y = window.scrollY; renderFlow(); window.scrollTo(0, y); // keep the same days in view
 }
 
 // Phones show one month at a time; the arrows in the top bar change month.
@@ -385,13 +395,7 @@ function renderFlowPhone() {
   const { y, m } = phoneMonth, t = today();
   const mr = monthRows(computeRows(monthDate(y, m, 31)), y, m);
   // the month name and arrows live in the phone top bar (see updatePhoneBar)
-  // column header: Dia | type selector | Saldo (a native select keeps the picker accessible)
-  const head = `<div class="list-head"><span>Dia</span>
-    <label class="type-pick" style="--c:${TYPES[phoneType].color}"><span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      <select data-ptype aria-label="Tipo de lançamento">${FLOW_KEYS.map(k => `<option value="${k}" ${k === phoneType ? 'selected' : ''}>${TYPES[k].plural}</option>`).join('')}</select></label>
-    <span>Saldo</span></div>`;
-  $view.innerHTML = `${inboxBanner()}${head}<section class="month phone-month"><div class="dlist">${dayListHtml(mr, t, phoneType)}</div></section>`;
+  $view.innerHTML = `${inboxBanner()}${flowListHead()}<section class="month phone-month"><div class="dlist">${dayListHtml(mr, t, phoneType)}</div></section>`;
   const row = $view.querySelector('.drow.today');
   if (row && !renderFlow.scrolled) { renderFlow.scrolled = true; row.scrollIntoView({ block: 'center' }); }
   else if (!row) window.scrollTo(0, 0);
@@ -408,29 +412,41 @@ document.addEventListener('touchend', e => {
   if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setPhoneType(FLOW_KEYS[FLOW_KEYS.indexOf(phoneType) + (dx < 0 ? 1 : -1)]);
 }, { passive: true });
 
+// three significant digits for the phone heat map: 6,62k · 13,4k · 123k · 341
+const compact3 = v => {
+  const a = Math.abs(v), s = v <= -0.5 ? '−' : '';
+  if (a < 999.5) return s + Math.round(a);
+  if (a < 999500) return s + Number((a / 1000).toPrecision(3)).toLocaleString('pt-BR') + 'k';
+  return s + Number((a / 1e6).toPrecision(3)).toLocaleString('pt-BR') + 'M';
+};
+
+// Horizonte grid: each month is its own column with Dia | Saldo and its name pinned on top.
+// Phones show about three months and snap month by month; the web shows all twelve side by side.
+function horizonColumns() {
+  clampView();
+  const rows = computeRows(windowEnd()), t = today(), tk = iso(t);
+  const byKey = new Map(rows.map(r => [r.k, r]));
+  const months = [...Array(12)].map((_, i) => { const f = monthDate(view.y, view.m + i, 1); return { y: f.getFullYear(), m: f.getMonth() }; });
+  const cols = months.map(o => {
+    const current = o.y === t.getFullYear() && o.m === t.getMonth();
+    let cells = '';
+    for (let day = 1; day <= daysIn(o.y, o.m); day++) {
+      const k = `${o.y}-${pad(o.m + 1)}-${pad(day)}`, r = byKey.get(k);
+      if (!r) { cells += `<div class="hz-d">${day}</div><div class="hz-v empty"></div>`; continue; }
+      cells += `<div class="hz-d${k === tk ? ' today' : ''}">${day}</div><div class="hz-v num ${level(r.bal)}${k === tk ? ' today' : ''}" data-day="${k}">${compact3(r.bal)}</div>`;
+    }
+    return `<div class="hz-month${current ? ' current' : ''}"><div class="hz-head">${monthShort(o.y, o.m)}</div><div class="hz-grid">${cells}</div></div>`;
+  }).join('');
+  return `<div class="hz-phone">${cols}</div>`;
+}
+
 function renderHorizon() {
   clampView();
-  const rows = computeRows(windowEnd()), t = today();
-  const max = Math.max(1, ...rows.map(r => Math.abs(r.bal)));
-  const months = [...Array(12)].map((_, i) => { const f = monthDate(view.y, view.m + i, 1); return { y: f.getFullYear(), m: f.getMonth() }; });
-  const byKey = new Map(rows.map(r => [r.k, r]));
-  let html = `<div class="page-head"><div><h1>Horizonte</h1><p>Um ano inteiro de saldos num mapa de calor — clique num dia para ver os lançamentos.</p></div>
-    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="legend">negativo <span class="bar"></span> positivo</div>${rangeControl(`${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 11)}`)}</div></div>
-    <div class="horizon-wrap"><table class="horizon"><thead><tr><th></th>${months.map(o => `<th>${monthShort(o.y, o.m)}</th>`).join('')}</tr></thead><tbody>`;
-  for (let day = 1; day <= 31; day++) {
-    html += `<tr><td class="dnum">${day}</td>`;
-    for (const o of months) {
-      if (day > daysIn(o.y, o.m)) { html += '<td class="empty"></td>'; continue; }
-      const k = `${o.y}-${pad(o.m + 1)}-${pad(day)}`, r = byKey.get(k);
-      if (!r) { html += '<td class="empty"></td>'; continue; }
-      const a = 0.12 + 0.78 * Math.min(1, Math.abs(r.bal) / max);
-      const rgb = r.bal < 0 ? 'var(--neg-rgb)' : 'var(--in-rgb)';
-      const fg = a > 0.5 ? '#fff' : 'var(--text)';
-      html += `<td class="num ${k === iso(t) ? 'today' : ''}" data-day="${k}" title="${parse(k).toLocaleDateString('pt-BR')}: ${money(r.bal)}" style="background:rgba(${rgb},${a.toFixed(2)});color:${fg}">${compact(r.bal)}</td>`;
-    }
-    html += '</tr>';
-  }
-  $view.innerHTML = html + '</tbody></table></div>';
+  const range = rangeControl(`${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 11)}`);
+  if (isPhone()) { $view.innerHTML = `<div class="page-head"><div></div>${range}</div>${horizonColumns()}`; return; }
+  $view.innerHTML = `<div class="page-head"><div><h1>Horizonte</h1><p>Um ano inteiro de saldos — clique num dia para ver os lançamentos.</p></div>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="legend"><span class="lg lv-neg2">&lt; −1.000</span><span class="lg lv-neg1">até −1.000</span><span class="lg lv-pos1">até 1.000</span><span class="lg lv-pos2">&gt; 1.000</span></div>${range}</div></div>
+    ${horizonColumns()}`;
 }
 
 function focusControl() {
@@ -549,7 +565,7 @@ function setTopBarHeight() {
 }
 window.addEventListener('resize', setTopBarHeight);
 // switch between the phone (one month) and desktop (12 months) layouts when the width crosses the breakpoint
-matchMedia('(max-width: 640px)').addEventListener('change', () => { if (user && document.body.dataset.route === 'fluxo') { renderFlow.scrolled = false; route(); } });
+matchMedia('(max-width: 640px)').addEventListener('change', () => { if (user && ['fluxo', 'horizonte'].includes(document.body.dataset.route)) { renderFlow.scrolled = false; route(); } });
 
 function route() {
   const r = (location.hash || '#fluxo').slice(1);
