@@ -50,7 +50,7 @@ function sampleState() {
   return {
     startBalance: 4200, startDate: d(1), theme: 'system',
     budget: { monthly: 3000, divisor: 'month' },
-    tags, cards, exceptions: [],
+    tags, cards, exceptions: [], inbox: [], rules: [], importToken: null,
     entries: [
       e('in', 12000, 'Salário', d(15), 'monthly'),
       e('in', 3500, 'Projeto freelance', d(28), 'monthly'),
@@ -80,7 +80,7 @@ const DEFAULT_TAGS = [['Moradia', '#2563eb'], ['Educação', '#7c5cff'], ['Trans
 // The theme is also kept locally so the login screen opens in the right colors.
 const localTheme = () => { try { return localStorage.getItem(KEY + ':theme') || 'system'; } catch (_) { return 'system'; } };
 const rememberTheme = t => { try { localStorage.setItem(KEY + ':theme', t); } catch (_) {} };
-const emptyState = () => ({ startBalance: 0, startDate: iso(monthDate(today().getFullYear(), today().getMonth(), 1)), theme: localTheme(), budget: { monthly: 0, divisor: 'month' }, tags: [], cards: [], entries: [], exceptions: [] });
+const emptyState = () => ({ startBalance: 0, startDate: iso(monthDate(today().getFullYear(), today().getMonth(), 1)), theme: localTheme(), budget: { monthly: 0, divisor: 'month' }, tags: [], cards: [], entries: [], exceptions: [], inbox: [], rules: [], importToken: null });
 
 const fromEntry = r => ({ id: r.id, type: r.type, amount: +r.amount, desc: r.description || '', date: r.date, endDate: r.end_date || '', repeat: r.repeat, count: r.installments || 1, tagId: r.tag_id || '', cardId: r.card_id || '' });
 // od = the date the occurrence originally fell on; amount/date/desc are optional overrides
@@ -92,12 +92,15 @@ const fromCard = r => ({ id: r.id, name: r.name, close: r.close_day, due: r.due_
 async function must(query) { const { data, error } = await query; if (error) throw error; return data; }
 
 async function loadAll() {
-  let [settings, tags, cards, entries, exceptions] = await Promise.all([
+  let [settings, tags, cards, entries, exceptions, inbox, rules, token] = await Promise.all([
     must(sb.from('wf_settings').select('*').maybeSingle()),
     must(sb.from('wf_tags').select('*').order('name')),
     must(sb.from('wf_cards').select('*').order('name')),
     must(sb.from('wf_entries').select('*').order('date')),
     must(sb.from('wf_entry_exceptions').select('*')),
+    must(sb.from('wf_inbox').select('*').eq('status', 'pending').order('created_at')),
+    must(sb.from('wf_merchant_rules').select('*')),
+    must(sb.from('wf_import_tokens').select('created_at,last_used_at').maybeSingle()),
   ]);
   if (!settings) { // first sign-in: create the settings row and starter categories
     settings = await must(sb.from('wf_settings').insert({ start_date: emptyState().startDate, theme: localTheme() }).select().single());
@@ -107,13 +110,53 @@ async function loadAll() {
     startBalance: +settings.start_balance, startDate: settings.start_date, theme: settings.theme,
     budget: { monthly: +settings.budget_monthly, divisor: settings.budget_divisor },
     tags: tags.map(fromTag), cards: cards.map(fromCard), entries: entries.map(fromEntry), exceptions: exceptions.map(fromException),
+    inbox: inbox.map(fromInbox), rules: rules.map(fromRule), importToken: token,
   };
   rememberTheme(state.theme);
 }
 
+// ---------- Apple Wallet import ----------
+const fromInbox = r => ({ id: r.id, amount: +r.amount, merchant: r.merchant || '', card: r.card || '', date: r.occurred_on, createdAt: r.created_at });
+const fromRule = r => ({ key: r.merchant_key, type: r.type, tagId: r.tag_id || '', cardId: r.card_id || '' });
+// "Padaria  X " and "PADARIA X" share one remembered rule
+const merchantKey = m => String(m || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 200);
+const IMPORT_URL = () => `${(window.WF_CONFIG || {}).supabaseUrl}/rest/v1/rpc/wf_import`;
+
+// What a new entry from an imported purchase should start as: a remembered rule for the
+// merchant wins; otherwise a Wallet card whose name matches one of the user's cards; otherwise Dia a dia.
+function importDefaults(item) {
+  const rule = state.rules.find(r => r.key === merchantKey(item.merchant));
+  const card = item.card && state.cards.find(c => {
+    const a = c.name.toLowerCase(), b = item.card.toLowerCase();
+    return a.includes(b) || b.includes(a);
+  });
+  let type = rule ? rule.type : card ? 'card' : 'daily';
+  let cardId = rule && rule.cardId ? rule.cardId : card ? card.id : '';
+  if (type === 'card' && !state.cards.some(c => c.id === cardId)) { type = 'daily'; cardId = ''; }
+  return { type, amount: item.amount, desc: item.merchant, date: item.date, tagId: rule ? rule.tagId : '', cardId };
+}
+
 const db = {
   settings: patch => must(sb.from('wf_settings').update(patch).eq('user_id', user.id)),
-  addEntry: async e => { const r = await must(sb.from('wf_entries').insert(toEntry(e)).select().single()); state.entries.push(fromEntry(r)); },
+  addEntry: async e => { const r = await must(sb.from('wf_entries').insert(toEntry(e)).select().single()); const en = fromEntry(r); state.entries.push(en); return en; },
+  // imported purchases
+  finishInbox: async (id, status, entryId = null) => {
+    await must(sb.from('wf_inbox').update({ status, entry_id: entryId }).eq('id', id));
+    state.inbox = state.inbox.filter(x => x.id !== id);
+  },
+  rememberMerchant: async (merchant, e) => {
+    const key = merchantKey(merchant); if (!key || e.type === 'in') return;
+    const row = { merchant_key: key, type: e.type, tag_id: e.tagId || null, card_id: e.type === 'card' ? e.cardId || null : null, updated_at: new Date().toISOString() };
+    await must(sb.from('wf_merchant_rules').upsert(row, { onConflict: 'user_id,merchant_key' }));
+    state.rules = state.rules.filter(r => r.key !== key).concat(fromRule(row));
+  },
+  rotateImportToken: async () => {
+    const token = await must(sb.rpc('wf_rotate_import_token'));
+    state.importToken = { created_at: new Date().toISOString(), last_used_at: null };
+    return token;
+  },
+  revokeImportToken: async () => { await must(sb.from('wf_import_tokens').delete().eq('user_id', user.id)); state.importToken = null; },
+  refreshInbox: async () => { state.inbox = (await must(sb.from('wf_inbox').select('*').eq('status', 'pending').order('created_at'))).map(fromInbox); },
   updateEntry: async (id, e) => {
     const r = await must(sb.from('wf_entries').update(toEntry(e)).eq('id', id).select().single());
     state.entries = state.entries.map(x => (x.id === id ? fromEntry(r) : x));
@@ -282,7 +325,7 @@ function renderFlow() {
     <div class="kpi"><div class="k">Dias no vermelho</div><div class="v ${neg ? 'neg' : ''}">${neg}</div><div class="s">de ${win.length} dias projetados</div></div>
     <div class="kpi"><div class="k">Saldo ao fim</div><div class="v ${last ? tone(last.bal) : ''}">${last ? money(last.bal) : '—'}</div><div class="s">${last ? last.d.toLocaleDateString('pt-BR') : ''}</div></div>
   </div>
-  <div class="chip-legend">${FLOW_KEYS.map(k => `<span class="chip" style="--c:${TYPES[k].color};font-family:inherit">${TYPES[k].plural}</span>`).join('')}</div>`;
+  <div class="chip-legend">${FLOW_KEYS.map(k => `<span class="chip" style="--c:${TYPES[k].color};font-family:inherit">${TYPES[k].plural}</span>`).join('')}</div>${inboxBanner()}`;
   for (let i = 0; i < 12; i++) {
     const f = monthDate(view.y, view.m + i, 1), y = f.getFullYear(), m = f.getMonth();
     const mr = monthRows(rows, y, m);
@@ -348,7 +391,7 @@ function renderFlowPhone() {
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       <select data-ptype aria-label="Tipo de lançamento">${FLOW_KEYS.map(k => `<option value="${k}" ${k === phoneType ? 'selected' : ''}>${TYPES[k].plural}</option>`).join('')}</select></label>
     <span>Saldo</span></div>`;
-  $view.innerHTML = `${head}<section class="month phone-month"><div class="dlist">${dayListHtml(mr, t, phoneType)}</div></section>`;
+  $view.innerHTML = `${inboxBanner()}${head}<section class="month phone-month"><div class="dlist">${dayListHtml(mr, t, phoneType)}</div></section>`;
   const row = $view.querySelector('.drow.today');
   if (row && !renderFlow.scrolled) { renderFlow.scrolled = true; row.scrollIntoView({ block: 'center' }); }
   else if (!row) window.scrollTo(0, 0);
@@ -475,6 +518,7 @@ function renderSettings() {
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
+    <div class="panel" style="grid-column:1/-1"><h3>Importar compras do Apple Pay</h3>${importHelp()}</div>
     <div class="panel"><h3>Conta</h3><p class="hint">Conectado como <b>${esc(user?.email || '')}</b>.</p>
       <button class="btn" data-act="logout">Sair da conta</button></div>
     <div class="panel"><h3>Dados</h3><p class="hint">Seus lançamentos ficam salvos na nuvem, visíveis só para a sua conta.</p>
@@ -528,7 +572,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 // Opens the entry form; pass `existing` to edit an entry (and its whole series) instead of creating one,
 // and `opts.from` to change the series only from that occurrence on (the earlier ones keep the old values).
 function openEntry(date, existing, opts = {}) {
-  let type = existing ? existing.type : 'out';
+  // opts.prefill starts a new entry from an imported purchase; opts.onSaved runs after it is created
+  let type = existing ? existing.type : (opts.prefill && opts.prefill.type) || 'out';
   const series = existing && existing.repeat !== 'none';
   const from = series && opts.from && opts.from > existing.date ? opts.from : null;
   const fromLabel = from && parse(from).toLocaleDateString('pt-BR');
@@ -565,6 +610,10 @@ function openEntry(date, existing, opts = {}) {
     prefill = { ...prefill, amt: Math.round(per * left * 100) / 100, count: left, rep: left > 1 ? 'installments' : 'none' };
   }
   if (from) prefill.date = from;
+  if (!existing && opts.prefill) {
+    const p = opts.prefill;
+    prefill = { amt: p.amount, desc: p.desc, date: p.date, rep: 'none', count: 3, tag: p.tagId || '', card: p.cardId || undefined };
+  }
   Object.assign(draw, prefill || { amt: undefined, desc: undefined, date: undefined, rep: undefined, count: undefined, tag: '', card: undefined });
   openEntry.setType = v => { keep(); type = v; draw(); };
   openEntry.submit = () => {
@@ -577,7 +626,8 @@ function openEntry(date, existing, opts = {}) {
     if (entry.desc.length > 200) return toast('Descrição muito longa (máx. 200)');
     const btn = modal.querySelector('[data-act=saveEntry]'); btn.disabled = true;
     if (from && d < from) return toast(`A nova data não pode ser antes de ${fromLabel}`);
-    const save = from ? () => db.splitSeries(existing, from, entry) : existing ? () => db.updateEntry(existing.id, entry) : () => db.addEntry(entry);
+    const save = from ? () => db.splitSeries(existing, from, entry) : existing ? () => db.updateEntry(existing.id, entry)
+      : async () => { const saved = await db.addEntry(entry); if (opts.onSaved) await opts.onSaved(saved); };
     run(async () => { await save(); closeModal(); }, from ? `Alterado a partir de ${fromLabel}` : existing ? 'Alterações salvas' : 'Lançamento salvo').finally(() => { btn.disabled = false; });
   };
   draw();
@@ -631,6 +681,75 @@ function openSeriesChoice(mode, e, od) {
   }));
 }
 
+// The clear-text import code is shown only right after it is generated (the database keeps a hash).
+let importTokenShown = '';
+function importHelp() {
+  const t = state.importToken, key = (window.WF_CONFIG || {}).supabaseAnonKey || '';
+  const when = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca';
+  const status = t
+    ? `<p class="hint">✓ Importação ativa desde ${when(t.created_at)} · último envio: ${when(t.last_used_at)}.</p>`
+    : '<p class="hint">Cada compra feita com Apple Pay chega aqui para você revisar e lançar com um toque. Comece gerando o seu código de importação.</p>';
+  const copyField = (id, label, value) => `<div class="field"><label>${label}</label><div class="inline" style="gap:6px"><input id="${id}" readonly value="${esc(value)}" style="font-family:'JetBrains Mono',monospace;font-size:12px"><button class="btn small" data-act="copy" data-target="${id}" style="flex:0 0 auto">Copiar</button></div></div>`;
+  const code = importTokenShown
+    ? `<div class="import-code">${copyField('impToken', '🔑 Seu código (aparece só agora: copie e cole no atalho)', importTokenShown)}</div>`
+    : '';
+  const steps = (t || importTokenShown) ? `
+    <ol class="import-steps">
+      <li>No iPhone, abra <b>Atalhos → Automação → Nova Automação → Transação</b>. Escolha os cartões da Wallet, deixe todas as categorias e marque <b>Executar Imediatamente</b>.</li>
+      <li>Adicione a ação <b>Obter Conteúdo do URL</b> e cole o endereço:${copyField('impUrl', 'URL', IMPORT_URL())}</li>
+      <li>Toque em <b>Mostrar Mais</b>: Método <b>POST</b>. Em <b>Cabeçalhos</b>, adicione dois:${copyField('impKey', 'apikey', key)}<div class="field"><label>Content-Type</label><input readonly value="application/json"></div></li>
+      <li>Em <b>Corpo da Solicitação</b>, escolha <b>JSON</b> e adicione campos do tipo <b>Texto</b>:
+        <ul>
+          <li><code>p_token</code> → o seu código${importTokenShown ? ' (acima)' : ' (gere um novo se não o tiver guardado)'}</li>
+          <li><code>p_amount</code> → toque e escolha <b>Entrada do Atalho → Quantia</b> (Amount)</li>
+          <li><code>p_merchant</code> → <b>Entrada do Atalho → Comerciante</b> (Merchant)</li>
+          <li><code>p_card</code> → <b>Entrada do Atalho → Cartão ou Passe</b> (Card or Pass)</li>
+        </ul></li>
+      <li>Salve e faça uma compra com Apple Pay. Ela aparece no <b>Fluxo</b> como “compra importada”.</li>
+    </ol>
+    <p class="hint">O código só permite <b>enviar</b> compras para revisão; ele não dá acesso aos seus dados. Se perder o celular, gere um novo ou desative.</p>` : '';
+  return status + code + steps + `<div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn ${t ? '' : 'primary'}" data-act="genToken">${t ? 'Gerar novo código' : 'Gerar código de importação'}</button>
+    ${t ? '<button class="btn danger" data-act="revokeToken">Desativar</button>' : ''}</div>`;
+}
+
+// Banner shown on Fluxo while there are imported purchases to review.
+function inboxBanner() {
+  const n = (state.inbox || []).length;
+  if (!n) return '';
+  const total = state.inbox.reduce((a, x) => a + x.amount, 0);
+  return `<button class="inbox-banner" data-act="inbox"><span class="ib-ico">📥</span><span class="ib-txt"><b>${n} compra${n === 1 ? '' : 's'} importada${n === 1 ? '' : 's'}</b><small>Apple Pay · ${money(total)} · toque para revisar</small></span><span class="ib-go">›</span></button>`;
+}
+
+// Review imported purchases: file each one as an entry (pre-filled) or discard it.
+function openInbox() {
+  const items = state.inbox || [];
+  const tagName = id => state.tags.find(t => t.id === id)?.name;
+  openModal(`<div class="modal-head"><h2>Compras importadas</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body">${items.length ? `<p class="hint" style="margin:0 0 10px">Cada compra vira um lançamento só quando você confirmar.</p><div class="rows">${items.map(x => {
+    const d = importDefaults(x), card = d.type === 'card' && state.cards.find(c => c.id === d.cardId);
+    const guess = [TYPES[d.type].label, card ? card.name : '', tagName(d.tagId) || ''].filter(Boolean).join(' · ');
+    return `<div class="row"><span class="sw" style="background:${TYPES[d.type].color}"></span><div class="grow"><b>${esc(x.merchant || 'Compra Apple Pay')}</b>
+      <div class="sub">${parse(x.date).toLocaleDateString('pt-BR')}${x.card ? ` · ${esc(x.card)}` : ''}<br>vai como: ${esc(guess)}</div></div>
+      <b class="num">${money(x.amount)}</b>
+      <div style="display:flex;flex-direction:column;gap:4px"><button class="btn small primary" data-act="inboxUse" data-id="${x.id}">Lançar</button><button class="btn small" data-act="inboxDrop" data-id="${x.id}">Descartar</button></div></div>`;
+  }).join('')}</div>` : '<div class="empty-state">Nenhuma compra para revisar.</div>'}</div>`);
+}
+function useInboxItem(id) {
+  const item = state.inbox.find(x => x.id === id); if (!item) return;
+  openEntry(item.date, null, {
+    prefill: importDefaults(item),
+    onSaved: async saved => {
+      await db.finishInbox(item.id, 'done', saved.id);
+      await db.rememberMerchant(item.merchant, saved);
+    },
+  });
+}
+// pick up purchases that arrived while the app was in the background
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && user && sb) db.refreshInbox().then(() => { if (document.body.dataset.route === 'fluxo') route(); }).catch(() => {});
+});
+
 // Change or skip a single occurrence of a series.
 function openOccurrence(e, od) {
   const x = state.exceptions.find(v => v.entryId === e.id && v.od === od && v.action === 'modify');
@@ -674,6 +793,27 @@ document.addEventListener('click', e => {
     case 'next': shift(1); break;
     case 'today': view = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false; route(); break;
     case 'newEntry': openEntry(); break;
+    case 'inbox': openInbox(); break;
+    case 'inboxUse': useInboxItem(a.dataset.id); break;
+    case 'inboxDrop': {
+      const item = state.inbox.find(x => x.id === a.dataset.id);
+      if (item && confirm(`Descartar a compra "${item.merchant || 'Apple Pay'}" de ${money(item.amount)}?`)) {
+        run(() => db.finishInbox(item.id, 'discarded'), 'Compra descartada').then(() => { if (state.inbox.length) openInbox(); else closeModal(); });
+      }
+      break;
+    }
+    case 'genToken':
+      if (state.importToken && !confirm('Gerar um novo código? O atalho que usa o código atual para de funcionar até você trocar por este.')) break;
+      run(async () => { importTokenShown = await db.rotateImportToken(); }, 'Código gerado');
+      break;
+    case 'revokeToken':
+      if (confirm('Desativar a importação? O atalho do iPhone para de funcionar.')) run(async () => { await db.revokeImportToken(); importTokenShown = ''; }, 'Importação desativada');
+      break;
+    case 'copy': {
+      const el = document.getElementById(a.dataset.target);
+      navigator.clipboard.writeText(el.value || el.textContent).then(() => toast('Copiado'), () => { el.select?.(); toast('Selecione e copie manualmente'); });
+      break;
+    }
     case 'mprev': shiftPhoneMonth(-1); break;
     case 'mnext': shiftPhoneMonth(1); break;
     case 'mtoday':
