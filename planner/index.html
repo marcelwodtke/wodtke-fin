@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Wodtke">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='1' stop-color='%2338bdf8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='13' fill='url(%23g)'/%3E%3Cpolyline points='9,17 16,33 24,21 32,33 39,13' fill='none' stroke='white' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='39' cy='13' r='3.5' fill='white'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231d4ed8'/%3E%3Cstop offset='1' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='13' fill='url(%23g)'/%3E%3Cpath d='M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4' fill='none' stroke='white' stroke-width='4.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M24 8.5v31' stroke='white' stroke-width='4.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" integrity="sha384-GFr3yTh5lJznCbZfpTtXnwboFsxqtTQoeTZCRHhE0579KrRmlCzen5AA8ohaB5ug" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,6 +36,7 @@
   --card: #f59e0b;
   --neg: #d9485f;
   --pos-rgb: 37, 99, 235;
+  --in-rgb: 15, 157, 107;
   --neg-rgb: 217, 72, 95;
   --shadow: 0 1px 2px rgba(15, 27, 51, .06), 0 8px 24px rgba(15, 27, 51, .06);
   --radius: 14px;
@@ -46,7 +47,7 @@
     --bg: #1b2840; --surface: #23324f; --surface-2: #2b3c5c; --border: #3a4d70;
     --text: #eef3fc; --muted: #a3b3cf; --primary: #6ea2ff; --primary-2: #5ccbf5;
     --primary-soft: #2f4775; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-    --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133;
+    --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
   }
 }
@@ -54,7 +55,7 @@
   --bg: #1b2840; --surface: #23324f; --surface-2: #2b3c5c; --border: #3a4d70;
   --text: #eef3fc; --muted: #a3b3cf; --primary: #6ea2ff; --primary-2: #5ccbf5;
   --primary-soft: #2f4775; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-  --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133;
+  --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -96,6 +97,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 110px; }
 .kpi .v { font-size: clamp(17px, 4.6vw, 22px); font-weight: 800; margin-top: 6px; letter-spacing: -.02em; white-space: nowrap; }
 .kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .neg { color: var(--neg) !important; }
+.pos { color: var(--in); }
 
 /* month tables */
 .month { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; }
@@ -120,6 +122,19 @@ table.flow td.bal { font-weight: 700; }
 table.flow tfoot td { font-weight: 800; background: var(--surface-2); border-top: 2px solid var(--border); }
 .forecast { font-style: italic; }
 
+/* same cell look as the phone grid: boxed cells, grey day column, coloured balance cells */
+table.flow td { border-top: 1px solid var(--border); }
+table.flow td + td, table.flow th + th { border-left: 1px solid var(--border); }
+table.flow td.day { background: var(--surface-2); }
+table.flow tr.today td { background: transparent !important; }
+table.flow tr.today td.day { background: var(--primary) !important; color: #fff; }
+table.flow tr.today td.day span { color: rgba(255, 255, 255, .8); }
+table.flow tr.today td.day::after { display: none; }
+table.flow tbody tr:hover td:not(.bal):not(.day) { background: var(--surface-2); }
+table.flow td.zero { color: color-mix(in srgb, var(--muted) 45%, transparent); }
+table.flow td.bal.pos { background: color-mix(in srgb, var(--in) 24%, var(--surface)); color: color-mix(in srgb, var(--in) 75%, var(--text)); }
+table.flow td.bal.neg { background: color-mix(in srgb, var(--neg) 22%, var(--surface)); }
+
 /* compact day list used instead of the wide table on phones */
 .dlist, .chip-legend { display: none; }
 .drow { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--border); cursor: pointer; }
@@ -134,14 +149,20 @@ table.flow tfoot td { font-weight: 800; background: var(--surface-2); border-top
 .chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); white-space: nowrap; }
 .chip.fc { font-style: italic; opacity: .75; }
 .drow .db { font-weight: 700; text-align: right; white-space: nowrap; }
+.drow .db.pos { color: var(--in); }
 .drow.today { background: var(--primary-soft); }
 .drow.today .dd b { color: var(--primary); }
-.mtotals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; padding: 12px 14px; background: var(--surface-2); border-top: 2px solid var(--border); font-size: 12.5px; }
-.mtotals div { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.mtotals .sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
 .chip-legend { flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
 .install-btn { display: none; }
 .install-btn.show { display: inline-flex; }
+.mbar, .tab-add { display: none; }
+.cal-btn { position: relative; width: 42px; height: 42px; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; cursor: pointer; color: var(--primary); display: grid; place-items: center; padding: 0; flex: none; }
+.cal-btn svg { width: 22px; height: 22px; }
+.mbar-mid { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.mbar-mid h2 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: capitalize; }
+.mbar-mid .icon-btn { width: 38px; height: 38px; font-size: 20px; flex: none; }
+.mbar-hz { width: 42px; height: 42px; flex: none; color: var(--muted); text-decoration: none; }
+.mbar-hz.active { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
 
 /* login */
 body.locked header.top, body.locked main, body.locked .fab { display: none; }
@@ -164,7 +185,7 @@ body.locked .auth { display: flex; }
 
 /* horizon */
 .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
-.legend .bar { width: 160px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, rgba(var(--neg-rgb), .9), rgba(var(--neg-rgb), .12), rgba(var(--pos-rgb), .12), rgba(var(--pos-rgb), .9)); }
+.legend .bar { width: 160px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, rgba(var(--neg-rgb), .9), rgba(var(--neg-rgb), .12), rgba(var(--in-rgb), .12), rgba(var(--in-rgb), .9)); }
 .horizon-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: auto; }
 table.horizon { border-collapse: separate; border-spacing: 3px; padding: 8px; min-width: 980px; width: 100%; }
 table.horizon th { font-size: 11.5px; color: var(--muted); font-weight: 700; padding: 4px; text-transform: capitalize; position: sticky; top: 0; background: var(--surface); }
@@ -227,8 +248,16 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 @media (max-width: 640px) {
   /* backdrop-filter would make the header the containing block for the fixed tab bar */
   header.top { backdrop-filter: none; background: var(--surface); }
-  .top-inner { gap: 10px; }
-  .brand small { display: none; }
+  .top-inner { gap: 10px; padding: 8px 10px; }
+  header.top .brand, .install-btn.show { display: none; }
+  .mbar { display: flex; align-items: center; gap: 8px; width: 100%; }
+  nav.tabs a[data-r="horizonte"] { display: none; }
+  /* the add button sits in the middle of the bottom bar instead of floating */
+  .fab { display: none; }
+  nav.tabs { align-items: center; }
+  .tab-add { display: grid; place-items: center; width: 54px; height: 54px; margin-top: -22px; border: 4px solid var(--surface); border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; box-shadow: 0 6px 16px rgba(var(--pos-rgb), .35); cursor: pointer; flex: none; }
+  .tab-add svg { width: 24px; height: 24px; }
+  main { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); justify-content: space-around; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 25; }
   nav.tabs a { flex-direction: column; gap: 2px; font-size: 10.5px; padding: 6px; }
   nav.tabs a span { display: block; }
@@ -239,6 +268,43 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .dlist { display: block; }
   .chip-legend { display: flex; }
   .month-head { padding: 12px 14px; }
+  /* Fluxo on phones: only the months, edge to edge, with the month name pinned under the top bar */
+  body[data-route="fluxo"] .page-head,
+  body[data-route="fluxo"] .kpis,
+  body[data-route="fluxo"] .chip-legend { display: none; }
+  body[data-route="fluxo"] main { padding-left: 0; padding-right: 0; padding-top: 0; }
+  body[data-route="fluxo"] .month { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; box-shadow: none; margin-bottom: 0; overflow: visible; }
+  body[data-route="fluxo"] .month-head { position: sticky; top: var(--top-h, 55px); z-index: 5; background: var(--surface-2); }
+  .phone-head { gap: 8px; padding: 8px 10px; }
+  .phone-head .mh-mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+  .phone-head h2 { font-size: 16px; white-space: nowrap; }
+  .phone-head .icon-btn { width: 40px; height: 40px; font-size: 20px; }
+  .phone-month { min-height: calc(100vh - var(--top-h, 55px) - 70px); }
+  /* phone list: Dia | chosen type | Saldo, as a three-column grid with a pinned header row */
+  .list-head, body[data-route="fluxo"] .drow { display: grid; grid-template-columns: 58px minmax(0, 1fr) minmax(0, 44%); }
+  .list-head { position: sticky; top: var(--top-h, 55px); z-index: 6; align-items: center; background: var(--surface); border-bottom: 2px solid var(--border); padding: 8px 0; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .list-head > span:first-child { text-align: center; }
+  .list-head > span:last-child { text-align: right; padding-right: 14px; }
+  .type-pick { position: relative; justify-self: start; margin-left: 8px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 700; max-width: 100%; }
+  .type-pick .tname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .type-pick svg { color: var(--muted); flex: none; }
+  .type-pick select { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; font-size: 16px; }
+  .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+  body[data-route="fluxo"] .drow { padding: 0; gap: 0; min-height: 48px; align-items: stretch; }
+  body[data-route="fluxo"] .drow > div { display: flex; align-items: center; min-width: 0; }
+  body[data-route="fluxo"] .drow .dd { width: auto; flex-direction: column; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-2); }
+  body[data-route="fluxo"] .drow .dd b { font-size: 16px; }
+  body[data-route="fluxo"] .drow.today { background: none; }
+  body[data-route="fluxo"] .drow.today .dd { background: var(--primary); }
+  body[data-route="fluxo"] .drow.today .dd b, body[data-route="fluxo"] .drow.today .dd span { color: #fff; }
+  .amt { justify-content: space-between; gap: 8px; padding: 0 12px; border-right: 1px solid var(--border); }
+  .amt .tdot { opacity: .25; }
+  .amt.has .tdot { opacity: 1; }
+  .tval { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tval.fc { font-style: italic; opacity: .7; }
+  body[data-route="fluxo"] .drow .db { justify-content: flex-end; padding: 0 14px; font-size: 13.5px; }
+  body[data-route="fluxo"] .drow .db.pos { background: color-mix(in srgb, var(--in) 24%, var(--surface)); color: color-mix(in srgb, var(--in) 75%, var(--text)); }
+  body[data-route="fluxo"] .drow .db.neg { background: color-mix(in srgb, var(--neg) 22%, var(--surface)); color: color-mix(in srgb, var(--neg) 80%, var(--text)); }
   main { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
 </style>
@@ -248,10 +314,10 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   <div class="auth-card">
     <div class="brand">
       <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs>
+        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
         <rect width="48" height="48" rx="13" fill="url(#lg2)"/>
-        <polyline points="9,17 16,33 24,21 32,33 39,13" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="39" cy="13" r="3.5" fill="#fff"/>
+        <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
       </svg>
       <div>Wodtke Finanças<small>planejador de fluxo de caixa</small></div>
     </div>
@@ -272,10 +338,10 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   <div class="top-inner">
     <div class="brand">
       <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs>
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
         <rect width="48" height="48" rx="13" fill="url(#lg)"/>
-        <polyline points="9,17 16,33 24,21 32,33 39,13" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="39" cy="13" r="3.5" fill="#fff"/>
+        <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
       </svg>
       <div><span id="appName">Wodtke Finanças</span><small>planejador de fluxo de caixa</small></div>
     </div>
@@ -283,10 +349,21 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
       <a href="#fluxo" data-r="fluxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18M9 6v12"/></svg><span>Fluxo</span></a>
       <a href="#horizonte" data-r="horizonte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Horizonte</span></a>
       <a href="#resumo" data-r="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></a>
+      <button class="tab-add" type="button" data-act="newEntry" aria-label="Novo lançamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <a href="#categorias" data-r="categorias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Categorias</span></a>
       <a href="#ajustes" data-r="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></a>
     </nav>
     <button class="btn small install-btn" data-act="install" title="Instalar o app neste aparelho">⤓ Instalar</button>
+    <!-- phone-only top bar: today shortcut, month switcher (or page name), Horizonte -->
+    <div class="mbar">
+      <button class="cal-btn" data-act="mtoday" title="Ir para hoje" aria-label="Ir para hoje">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+      </button>
+      <div class="mbar-mid" id="mbarMid"></div>
+      <a class="icon-btn mbar-hz" href="#horizonte" title="Horizonte" aria-label="Horizonte">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </a>
+    </div>
   </div>
 </header>
 

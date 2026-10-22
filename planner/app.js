@@ -2,6 +2,8 @@
 // ---------- utilities ----------
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const money = v => brl.format(Math.abs(v) < 0.005 ? 0 : v);
+// colour class for a signed balance/result: green when positive, red when negative, plain at zero
+const tone = v => (v <= -0.005 ? 'neg' : v >= 0.005 ? 'pos' : '');
 const compact = v => {
   const a = Math.abs(v), s = v < 0 ? '-' : '';
   if (a >= 1e6) return s + (a / 1e6).toFixed(1).replace('.', ',') + 'M';
@@ -252,7 +254,7 @@ function clampView() {
 
 // ---------- rendering ----------
 const $view = document.getElementById('view');
-const cell = v => `<td class="num${Math.abs(v) < 0.005 ? ' zero' : ''}">${money(v)}</td>`;
+const cell = v => (Math.abs(v) < 0.005 ? '<td class="num zero">—</td>' : `<td class="num">${money(v)}</td>`);
 const dot = t => `<span class="dot" style="background:${TYPES[t].color}"></span>`;
 
 function rangeControl(label) {
@@ -264,6 +266,7 @@ function rangeControl(label) {
 }
 
 function renderFlow() {
+  if (isPhone()) return renderFlowPhone();
   clampView();
   const rows = computeRows(windowEnd()), t = today();
   const win = rows.filter(r => r.d >= monthDate(view.y, view.m, 1));
@@ -274,40 +277,93 @@ function renderFlow() {
   const label = `${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 11)}`;
   let html = `<div class="page-head"><div><h1>Fluxo diário</h1><p>Saldo projetado dia a dia pelos próximos 12 meses.</p></div>${rangeControl(label)}</div>
   <div class="kpis">
-    <div class="kpi"><div class="k">Saldo hoje</div><div class="v ${todayRow && todayRow.bal < 0 ? 'neg' : ''}">${todayRow ? money(todayRow.bal) : '—'}</div><div class="s">${t.toLocaleDateString('pt-BR')}</div></div>
-    <div class="kpi"><div class="k">Menor saldo</div><div class="v ${lowest.bal < 0 ? 'neg' : ''}">${money(lowest.bal)}</div><div class="s">em ${lowest.d.toLocaleDateString('pt-BR')}</div></div>
+    <div class="kpi"><div class="k">Saldo hoje</div><div class="v ${todayRow ? tone(todayRow.bal) : ''}">${todayRow ? money(todayRow.bal) : '—'}</div><div class="s">${t.toLocaleDateString('pt-BR')}</div></div>
+    <div class="kpi"><div class="k">Menor saldo</div><div class="v ${tone(lowest.bal)}">${money(lowest.bal)}</div><div class="s">em ${lowest.d.toLocaleDateString('pt-BR')}</div></div>
     <div class="kpi"><div class="k">Dias no vermelho</div><div class="v ${neg ? 'neg' : ''}">${neg}</div><div class="s">de ${win.length} dias projetados</div></div>
-    <div class="kpi"><div class="k">Saldo ao fim</div><div class="v ${last && last.bal < 0 ? 'neg' : ''}">${last ? money(last.bal) : '—'}</div><div class="s">${last ? last.d.toLocaleDateString('pt-BR') : ''}</div></div>
+    <div class="kpi"><div class="k">Saldo ao fim</div><div class="v ${last ? tone(last.bal) : ''}">${last ? money(last.bal) : '—'}</div><div class="s">${last ? last.d.toLocaleDateString('pt-BR') : ''}</div></div>
   </div>
   <div class="chip-legend">${FLOW_KEYS.map(k => `<span class="chip" style="--c:${TYPES[k].color};font-family:inherit">${TYPES[k].plural}</span>`).join('')}</div>`;
   for (let i = 0; i < 12; i++) {
     const f = monthDate(view.y, view.m + i, 1), y = f.getFullYear(), m = f.getMonth();
     const mr = monthRows(rows, y, m);
     if (!mr.length) continue;
-    html += `<section class="month" id="m-${y}-${m}"><div class="month-head"><h2>${monthName(y, m)}</h2><div class="end">saldo final <b class="num ${mr[mr.length - 1].bal < 0 ? 'neg' : ''}">${money(mr[mr.length - 1].bal)}</b></div></div>
+    html += `<section class="month" id="m-${y}-${m}"><div class="month-head"><h2>${monthName(y, m)}</h2><div class="end">saldo final <b class="num ${tone(mr[mr.length - 1].bal)}">${money(mr[mr.length - 1].bal)}</b></div></div>
     <div class="scroll"><table class="flow"><thead><tr><th>Dia</th>${['in', 'out', 'daily', 'save', 'card'].map(k => `<th>${dot(k)}${TYPES[k].plural}</th>`).join('')}<th>Saldo</th></tr></thead><tbody>`;
     for (const r of mr) {
       const wk = [0, 6].includes(r.d.getDay());
       html += `<tr data-day="${r.k}" class="${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}"><td class="day">${r.d.getDate()}<span>${weekday(r.d)}</span></td>
         ${cell(r.in)}${cell(r.out)}${cell(r.daily).replace('<td class="num', `<td class="num${r.budget && !r.items.some(x => x.e.type === 'daily') ? ' forecast' : ''}`)}${cell(r.save)}${cell(r.card)}
-        <td class="num bal ${r.bal < 0 ? 'neg' : ''}">${money(r.bal)}</td></tr>`;
+        <td class="num bal ${tone(r.bal)}">${money(r.bal)}</td></tr>`;
     }
     html += `</tbody><tfoot><tr><td>Total</td>${['in', 'out', 'daily', 'save', 'card'].map(k => `<td class="num">${money(sum(mr, k))}</td>`).join('')}<td></td></tr></tfoot></table></div>`;
-    html += `<div class="dlist">${mr.map(r => {
-      const wk = [0, 6].includes(r.d.getDay());
-      const chips = FLOW_KEYS.filter(k => Math.abs(r[k]) >= 0.005).map(k => {
-        const fc = k === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
-        return `<span class="chip${fc ? ' fc' : ''}" style="--c:${TYPES[k].color}" title="${TYPES[k].plural}">${k === 'in' ? '+' : '−'}${shortNum.format(r[k])}</span>`;
-      }).join('');
-      return `<div class="drow ${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}" data-day="${r.k}"><div class="dd"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></div>
-        <div class="chips">${chips || '<span class="none">—</span>'}</div><div class="db num ${r.bal < 0 ? 'neg' : ''}">${money(r.bal)}</div></div>`;
-    }).join('')}</div>
-    <div class="dlist mtotals">${FLOW_KEYS.map(k => `<div><span><span class="sw" style="background:${TYPES[k].color}"></span>${TYPES[k].plural}</span><b class="num">${money(sum(mr, k))}</b></div>`).join('')}</div></section>`;
+    html += `</section>`;
   }
   $view.innerHTML = html;
-  const tr = $view.querySelector(matchMedia('(max-width: 640px)').matches ? '.drow.today' : 'tr.today');
+  const tr = $view.querySelector('tr.today');
   if (tr && !renderFlow.scrolled) { renderFlow.scrolled = true; tr.scrollIntoView({ block: 'center' }); }
 }
+
+// compact day list for one movement type: the day, that type's amount, and the closing balance
+function dayListHtml(mr, t, type) {
+  return mr.map(r => {
+    const wk = [0, 6].includes(r.d.getDay()), v = r[type];
+    const fc = type === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
+    const has = Math.abs(v) >= 0.005;
+    const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : '<span class="none">—</span>';
+    return `<div class="drow ${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}" data-day="${r.k}"><div class="dd"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></div>
+      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="tdot"></span>${amount}</div><div class="db num ${tone(r.bal)}">${money(r.bal)}</div></div>`;
+  }).join('');
+}
+
+// Which movement type the phone list shows; remembered on this device.
+let phoneType = (() => { try { const v = localStorage.getItem(KEY + ':phoneType'); return FLOW_KEYS.includes(v) ? v : 'in'; } catch (_) { return 'in'; } })();
+function setPhoneType(type) {
+  if (!FLOW_KEYS.includes(type) || type === phoneType) return;
+  phoneType = type;
+  try { localStorage.setItem(KEY + ':phoneType', type); } catch (_) {}
+  const y = window.scrollY; renderFlowPhone(); window.scrollTo(0, y); // keep the same days in view
+}
+
+// Phones show one month at a time; the arrows in the top bar change month.
+const isPhone = () => matchMedia('(max-width: 640px)').matches;
+let phoneMonth = { y: today().getFullYear(), m: today().getMonth() };
+function shiftPhoneMonth(n) {
+  const s = parse(state.startDate), f = monthDate(phoneMonth.y, phoneMonth.m + n, 1);
+  if (f.getFullYear() * 12 + f.getMonth() < s.getFullYear() * 12 + s.getMonth()) return toast('Antes da data inicial do planejamento');
+  phoneMonth = { y: f.getFullYear(), m: f.getMonth() };
+  renderFlow.scrolled = false; route();
+}
+function clampPhoneMonth() {
+  const s = parse(state.startDate);
+  if (phoneMonth.y * 12 + phoneMonth.m < s.getFullYear() * 12 + s.getMonth()) phoneMonth = { y: s.getFullYear(), m: s.getMonth() };
+}
+function renderFlowPhone() {
+  clampPhoneMonth();
+  const { y, m } = phoneMonth, t = today();
+  const mr = monthRows(computeRows(monthDate(y, m, 31)), y, m);
+  // the month name and arrows live in the phone top bar (see updatePhoneBar)
+  // column header: Dia | type selector | Saldo (a native select keeps the picker accessible)
+  const head = `<div class="list-head"><span>Dia</span>
+    <label class="type-pick" style="--c:${TYPES[phoneType].color}"><span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <select data-ptype aria-label="Tipo de lançamento">${FLOW_KEYS.map(k => `<option value="${k}" ${k === phoneType ? 'selected' : ''}>${TYPES[k].plural}</option>`).join('')}</select></label>
+    <span>Saldo</span></div>`;
+  $view.innerHTML = `${head}<section class="month phone-month"><div class="dlist">${dayListHtml(mr, t, phoneType)}</div></section>`;
+  const row = $view.querySelector('.drow.today');
+  if (row && !renderFlow.scrolled) { renderFlow.scrolled = true; row.scrollIntoView({ block: 'center' }); }
+  else if (!row) window.scrollTo(0, 0);
+}
+
+document.addEventListener('change', e => { if (e.target.matches('select[data-ptype]')) setPhoneType(e.target.value); });
+
+// a sideways swipe on the list switches to the next/previous movement type (phones only)
+let swipe = null;
+document.addEventListener('touchstart', e => { swipe = isPhone() && document.body.dataset.route === 'fluxo' && e.target.closest('.phone-month') ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!swipe) return;
+  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y; swipe = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setPhoneType(FLOW_KEYS[FLOW_KEYS.indexOf(phoneType) + (dx < 0 ? 1 : -1)]);
+}, { passive: true });
 
 function renderHorizon() {
   clampView();
@@ -325,7 +381,7 @@ function renderHorizon() {
       const k = `${o.y}-${pad(o.m + 1)}-${pad(day)}`, r = byKey.get(k);
       if (!r) { html += '<td class="empty"></td>'; continue; }
       const a = 0.12 + 0.78 * Math.min(1, Math.abs(r.bal) / max);
-      const rgb = r.bal < 0 ? 'var(--neg-rgb)' : 'var(--pos-rgb)';
+      const rgb = r.bal < 0 ? 'var(--neg-rgb)' : 'var(--in-rgb)';
       const fg = a > 0.5 ? '#fff' : 'var(--text)';
       html += `<td class="num ${k === iso(t) ? 'today' : ''}" data-day="${k}" title="${parse(k).toLocaleDateString('pt-BR')}: ${money(r.bal)}" style="background:rgba(${rgb},${a.toFixed(2)});color:${fg}">${compact(r.bal)}</td>`;
     }
@@ -353,7 +409,7 @@ function renderSummary() {
   const upcoming = rows.filter(r => r.d > today()).slice(0, 10).flatMap(r => r.items.map(x => ({ ...x, d: r.d }))).slice(0, 8);
   $view.innerHTML = `<div class="page-head"><div><h1>Resumo do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div>${focusControl()}</div>
   <div class="kpis">
-    <div class="kpi"><div class="k">Resultado</div><div class="v ${result < 0 ? 'neg' : ''}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
+    <div class="kpi"><div class="k">Resultado</div><div class="v ${tone(result)}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
     <div class="kpi"><div class="k">Taxa de reserva</div><div class="v">${(rate * 100).toFixed(1).replace('.', ',')}%</div><div class="s">${money(tot('save'))} guardados</div></div>
     <div class="kpi"><div class="k">Custo de vida</div><div class="v">${money(life)}</div><div class="s">fixas + dia a dia + cartão</div></div>
     <div class="kpi"><div class="k">Dia a dia médio</div><div class="v">${money(tot('daily') / mr.length)}</div><div class="s">por dia, ${mr.length} dias</div></div>
@@ -367,9 +423,9 @@ function renderSummary() {
       </div></div>
     <div class="panel"><h3>Saldo no mês</h3><p class="hint">Pontos de atenção do período.</p>
       <div class="rows">
-        <div class="row"><div class="grow">Saldo inicial</div><b class="num ${mr[0].bal - (mr[0].in - mr[0].out - mr[0].daily - mr[0].save - mr[0].card) < 0 ? 'neg' : ''}">${money(mr[0].bal - (mr[0].in - mr[0].out - mr[0].daily - mr[0].save - mr[0].card))}</b></div>
-        <div class="row"><div class="grow">Menor saldo<div class="sub">${low.d.toLocaleDateString('pt-BR')}</div></div><b class="num ${low.bal < 0 ? 'neg' : ''}">${money(low.bal)}</b></div>
-        <div class="row"><div class="grow">Saldo final</div><b class="num ${mr[mr.length - 1].bal < 0 ? 'neg' : ''}">${money(mr[mr.length - 1].bal)}</b></div>
+        <div class="row"><div class="grow">Saldo inicial</div><b class="num ${tone(mr[0].bal - (mr[0].in - mr[0].out - mr[0].daily - mr[0].save - mr[0].card))}">${money(mr[0].bal - (mr[0].in - mr[0].out - mr[0].daily - mr[0].save - mr[0].card))}</b></div>
+        <div class="row"><div class="grow">Menor saldo<div class="sub">${low.d.toLocaleDateString('pt-BR')}</div></div><b class="num ${tone(low.bal)}">${money(low.bal)}</b></div>
+        <div class="row"><div class="grow">Saldo final</div><b class="num ${tone(mr[mr.length - 1].bal)}">${money(mr[mr.length - 1].bal)}</b></div>
         <div class="row"><div class="grow">Orçamento diário previsto<div class="sub">${money(dailyBudget(mr[0].d))} por dia nos dias futuros</div></div><b class="num">${money(sum(mr, 'budget'))}</b></div>
       </div>
       <h3 style="margin-top:18px">Próximos lançamentos</h3>
@@ -433,10 +489,32 @@ function renderSettings() {
 }
 
 const routes = { fluxo: renderFlow, horizonte: renderHorizon, resumo: renderSummary, categorias: renderTags, ajustes: renderSettings };
+// Phone top bar: calendar (go to today), month switcher on Fluxo (page name elsewhere), Horizonte shortcut.
+const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Resumo', categorias: 'Categorias', ajustes: 'Ajustes' };
+function updatePhoneBar(name) {
+  document.querySelector('.mbar-hz').classList.toggle('active', name === 'horizonte');
+  document.getElementById('mbarMid').innerHTML = name === 'fluxo'
+    ? `<button class="icon-btn" data-act="mprev" title="Mês anterior">‹</button><h2>${monthName(phoneMonth.y, phoneMonth.m)}</h2><button class="icon-btn" data-act="mnext" title="Próximo mês">›</button>`
+    : `<h2>${PAGE_NAMES[name] || ''}</h2>`;
+}
+
+// sticky month headers sit right under the top bar, whose height varies by device
+function setTopBarHeight() {
+  const h = document.querySelector('header.top').offsetHeight;
+  if (h) document.documentElement.style.setProperty('--top-h', h + 'px');
+}
+window.addEventListener('resize', setTopBarHeight);
+// switch between the phone (one month) and desktop (12 months) layouts when the width crosses the breakpoint
+matchMedia('(max-width: 640px)').addEventListener('change', () => { if (user && document.body.dataset.route === 'fluxo') { renderFlow.scrolled = false; route(); } });
+
 function route() {
   const r = (location.hash || '#fluxo').slice(1);
-  const fn = routes[r] || renderFlow;
-  document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('active', a.dataset.r === (routes[r] ? r : 'fluxo')));
+  const fn = routes[r] || renderFlow, name = routes[r] ? r : 'fluxo';
+  document.body.dataset.route = name; // lets the CSS style each page differently on phones
+  if (name === 'fluxo' && isPhone()) clampPhoneMonth();
+  updatePhoneBar(name);
+  setTopBarHeight();
+  document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('active', a.dataset.r === name));
   fn();
 }
 
@@ -519,12 +597,12 @@ function openDay(k) {
   };
   const items = r.items.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}${exNote(x)}</div></div>
-    <b class="num ${x.e.type === 'in' ? '' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">✏️</button><button class="icon-btn" title="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">🗑</button></div>`).join('');
+    <b class="num ${x.e.type === 'in' ? 'pos' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">✏️</button><button class="icon-btn" title="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">🗑</button></div>`).join('');
   const skipped = (r.skipped || []).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
   openModal(`<div class="modal-head"><h2 style="text-transform:capitalize">${r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2><button class="icon-btn" data-act="close">✕</button></div>
   <div class="modal-body"><div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
-  <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${r.bal < 0 ? 'neg' : ''}">${money(r.bal)}</b></div></div></div>
+  <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
 }
 
@@ -595,6 +673,13 @@ document.addEventListener('click', e => {
     case 'prev': shift(-1); break;
     case 'next': shift(1); break;
     case 'today': view = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false; route(); break;
+    case 'newEntry': openEntry(); break;
+    case 'mprev': shiftPhoneMonth(-1); break;
+    case 'mnext': shiftPhoneMonth(1); break;
+    case 'mtoday':
+      phoneMonth = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false;
+      if (document.body.dataset.route !== 'fluxo') location.hash = '#fluxo'; else route();
+      break;
     case 'fprev': fshift(-1); break;
     case 'fnext': fshift(1); break;
     case 'close': closeModal(); break;
