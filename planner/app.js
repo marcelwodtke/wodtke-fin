@@ -657,7 +657,7 @@ function horizonIcon(size = 20) {
   return `<svg class="hz-icon" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${cells}</svg>`;
 }
 function updateHorizonIcons() {
-  document.querySelector('.mbar-hz').innerHTML = horizonIcon(22);
+  document.querySelector('.mbar-hz').innerHTML = horizonIcon(30);
   const tab = document.querySelector('nav.tabs a[data-r="horizonte"] svg');
   if (tab) tab.outerHTML = horizonIcon(17);
 }
