@@ -56,6 +56,10 @@ try {
   expect('rejects an unreadable amount', !!r.error, r.error || 'accepted');
   r = await imp(token, '0,00');
   expect('rejects a zero amount', !!r.error, r.error || 'accepted');
+  r = await imp(`  ${token}\n`, '10,00');
+  expect('accepts the code with pasted spaces/newline', !r.error, r.error || 'ok');
+  r = await imp(token.charAt(0).toUpperCase() + token.slice(1), '10,00');
+  expect('accepts the code with a capitalised first letter', !r.error, r.error || 'ok');
   r = await imp('wfi_' + 'f'.repeat(48), '10,00');
   expect('rejects a wrong code', !!r.error, r.error || 'accepted');
   r = await imp(null, '10,00');
@@ -68,7 +72,7 @@ try {
   // the owner sees the imported items; a stranger does not
   await as('authenticated', owner);
   r = await attempt(`select count(*)::int as n, bool_and(status = 'pending') as pending, bool_and(user_id = $1) as mine from public.wf_inbox where created_at > now() - interval '1 minute'`, [owner]);
-  expect('owner sees the imported purchases as pending', !r.error && r.rows[0].n === cases.length + 1 && r.rows[0].pending && r.rows[0].mine, r.error || `${r.rows[0].n} items`);
+  expect('owner sees the imported purchases as pending', !r.error && r.rows[0].n === cases.length + 3 && r.rows[0].pending && r.rows[0].mine, r.error || `${r.rows[0].n} items`);
   await as('authenticated', randomUUID());
   r = await attempt(`select count(*)::int as n from public.wf_inbox`);
   expect('stranger cannot see the inbox', !r.error && r.rows[0].n === 0, r.error || `${r.rows[0].n} items`);
