@@ -22,7 +22,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const TYPES = {
   in:    { label: 'Receita',   plural: 'Receitas',   hint: 'salário, extras',      color: 'var(--in)' },
   out:   { label: 'Fixa',      plural: 'Fixas',      hint: 'contas, aluguel',      color: 'var(--out)' },
-  daily: { label: 'Dia a dia', plural: 'Dia a dia',  hint: 'compras variáveis',    color: 'var(--daily)' },
+  daily: { label: 'Diário', plural: 'Diário',     hint: 'compras variáveis',    color: 'var(--daily)' },
   save:  { label: 'Reserva',   plural: 'Reservas',   hint: 'investir, guardar',    color: 'var(--save)' },
   card:  { label: 'Cartão',    plural: 'Cartão',     hint: 'compras no crédito',   color: 'var(--card)' },
 };
@@ -119,7 +119,7 @@ const merchantKey = m => String(m || '').trim().replace(/\s+/g, ' ').toLowerCase
 const IMPORT_URL = () => `${(window.WF_CONFIG || {}).supabaseUrl}/rest/v1/rpc/wf_import`;
 
 // What a new entry from an imported purchase should start as: a remembered rule for the
-// merchant wins; otherwise a Wallet card whose name matches one of the user's cards; otherwise Dia a dia.
+// merchant wins; otherwise a Wallet card whose name matches one of the user's cards; otherwise Diário.
 function importDefaults(item) {
   const rule = state.rules.find(r => r.key === merchantKey(item.merchant));
   const card = item.card && state.cards.find(c => {
@@ -556,8 +556,8 @@ function renderSummary() {
   <div class="kpis">
     <div class="kpi"><div class="k">Resultado</div><div class="v ${tone(result)}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
     <div class="kpi"><div class="k">Taxa de reserva</div><div class="v">${(rate * 100).toFixed(1).replace('.', ',')}%</div><div class="s">${money(tot('save'))} guardados</div></div>
-    <div class="kpi"><div class="k">Custo de vida</div><div class="v">${money(life)}</div><div class="s">fixas + dia a dia + cartão</div></div>
-    <div class="kpi"><div class="k">Dia a dia médio</div><div class="v">${money(tot('daily') / mr.length)}</div><div class="s">por dia, ${mr.length} dias</div></div>
+    <div class="kpi"><div class="k">Custo de vida</div><div class="v">${money(life)}</div><div class="s">fixas + diário + cartão</div></div>
+    <div class="kpi"><div class="k">Diário médio</div><div class="v">${money(tot('daily') / mr.length)}</div><div class="s">por dia, ${mr.length} dias</div></div>
   </div>
   <div class="grid two">
     <div class="panel"><h3>Para onde vai o dinheiro</h3><p class="hint">Composição das saídas do mês.</p>

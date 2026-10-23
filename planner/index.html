@@ -121,7 +121,7 @@ table.flow tr.today td:not(.bal) { background: var(--primary-soft) !important; }
 table.flow tr.today td.day::after { content: "hoje"; margin-left: 6px; font-size: 10px; font-weight: 800; color: var(--on-primary); background: var(--primary); border-radius: 6px; padding: 1px 6px; text-transform: uppercase; }
 table.flow td.bal { font-weight: 700; }
 table.flow tfoot td { font-weight: 800; background: var(--surface-2); border-top: 2px solid var(--border); }
-.forecast { font-style: italic; }
+.forecast { opacity: .75; }
 
 /* same cell look as the phone grid: boxed cells, grey day column, coloured balance cells */
 table.flow td { border-top: 1px solid var(--border); }
@@ -159,7 +159,7 @@ table.flow td.bal { font-size: 13.5px; }
 .drow .chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .drow .none { color: color-mix(in srgb, var(--muted) 55%, transparent); font-size: 12px; }
 .chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); white-space: nowrap; }
-.chip.fc { font-style: italic; opacity: .75; }
+.chip.fc { opacity: .75; }
 .drow .db { font-weight: 700; text-align: right; white-space: nowrap; }
 .drow .db.pos { color: var(--in); }
 .drow.today { background: var(--primary-soft); }
@@ -396,7 +396,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .pane .tdot { opacity: .25; }
   .pane.has .tdot { opacity: 1; }
   .tval { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tval.fc { font-style: italic; opacity: .7; }
+  .tval.fc { opacity: .7; }
   .tval.zero { color: color-mix(in srgb, var(--muted) 45%, transparent); font-weight: 500; }
   body[data-route="fluxo"] .drow .db { justify-content: flex-end; padding: 0 14px; font-size: 13.5px; }
   body[data-route="fluxo"] .drow .db.pos { background: color-mix(in srgb, var(--in) 24%, var(--surface)); color: color-mix(in srgb, var(--in) 75%, var(--text)); }
