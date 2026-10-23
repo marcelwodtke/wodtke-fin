@@ -271,10 +271,27 @@ function buildLedger(end) {
 function baseAmount(e, od) { const o = occurrences(e, parse(od)).find(o => iso(o.d) === od); return o ? o.amt : +e.amount; }
 // 1-based position of an occurrence inside its series
 function occurrenceIndex(e, od) { return occurrences(e, parse(od)).findIndex(o => iso(o.d) === od) + 1; }
+// The earliest day the app shows: a year before the starting point, or the first entry's month if older.
+function firstDay() {
+  const s = parse(state.startDate);
+  let f = monthDate(s.getFullYear(), s.getMonth() - 12, 1);
+  for (const e of state.entries) { const d = parse(e.date); if (d < f) f = monthDate(d.getFullYear(), d.getMonth(), 1); }
+  return f;
+}
 function computeRows(end) {
-  const L = buildLedger(end), t = today(), rows = [];
+  const L = buildLedger(end), t = today(), rows = [], start = parse(state.startDate);
+  // before the starting point the balance is worked out backwards: the start balance is
+  // what was left at the end of the day before it, and each earlier day undoes its movements
+  const past = [];
+  let back = +state.startBalance || 0;
+  for (let d = addDays(start, -1), first = firstDay(); d >= first; d = addDays(d, -1)) {
+    const k = iso(d), b = L.get(k) || emptyDay();
+    past.push({ d, k, in: b.in, out: b.out, daily: b.daily, budget: 0, save: b.save, card: b.card, bal: back, items: b.items, skipped: b.skipped });
+    back -= b.in - b.out - b.daily - b.save - b.card;
+  }
+  rows.push(...past.reverse());
   let bal = +state.startBalance || 0;
-  for (let d = parse(state.startDate); d <= end; d = addDays(d, 1)) {
+  for (let d = start; d <= end; d = addDays(d, 1)) {
     const k = iso(d), b = L.get(k) || emptyDay();
     const budget = d > t ? dailyBudget(d) : 0;
     const daily = b.daily + budget;
@@ -287,7 +304,7 @@ const windowEnd = () => monthDate(view.y, view.m + 11, 31);
 const monthRows = (rows, y, m) => rows.filter(r => r.d.getFullYear() === y && r.d.getMonth() === m);
 const sum = (rs, f) => rs.reduce((a, r) => a + r[f], 0);
 function clampView() {
-  const s = parse(state.startDate);
+  const s = firstDay();
   if (view.y * 12 + view.m < s.getFullYear() * 12 + s.getMonth()) { view.y = s.getFullYear(); view.m = s.getMonth(); }
 }
 
@@ -413,13 +430,13 @@ function setPhoneType(type) {
 const isPhone = () => matchMedia('(max-width: 640px)').matches;
 let phoneMonth = { y: today().getFullYear(), m: today().getMonth() };
 function shiftPhoneMonth(n) {
-  const s = parse(state.startDate), f = monthDate(phoneMonth.y, phoneMonth.m + n, 1);
-  if (f.getFullYear() * 12 + f.getMonth() < s.getFullYear() * 12 + s.getMonth()) return toast('Antes da data inicial do planejamento');
+  const s = firstDay(), f = monthDate(phoneMonth.y, phoneMonth.m + n, 1);
+  if (f.getFullYear() * 12 + f.getMonth() < s.getFullYear() * 12 + s.getMonth()) return toast('Não há meses anteriores');
   phoneMonth = { y: f.getFullYear(), m: f.getMonth() };
   renderFlow.scrolled = false; route();
 }
 function clampPhoneMonth() {
-  const s = parse(state.startDate);
+  const s = firstDay();
   if (phoneMonth.y * 12 + phoneMonth.m < s.getFullYear() * 12 + s.getMonth()) phoneMonth = { y: s.getFullYear(), m: s.getMonth() };
 }
 function renderFlowPhone() {
@@ -545,7 +562,7 @@ function focusRows() {
 
 function renderSummary() {
   const { rows } = focusRows(), mr = monthRows(rows, focus.y, focus.m);
-  if (!mr.length) { $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1></div>${focusControl()}</div><div class="panel empty-state">Sem dados antes da data inicial (${parse(state.startDate).toLocaleDateString('pt-BR')}).</div>`; return; }
+  if (!mr.length) { $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1></div>${focusControl()}</div><div class="panel empty-state">Sem dados para este mês (o app mostra até ${firstDay().toLocaleDateString('pt-BR')}).</div>`; return; }
   const tot = k => sum(mr, k), inc = tot('in'), outs = tot('out') + tot('daily') + tot('save') + tot('card');
   const result = inc - outs, life = tot('out') + tot('daily') + tot('card');
   const rate = inc ? tot('save') / inc : 0;

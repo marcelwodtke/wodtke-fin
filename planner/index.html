@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wodtke Finanças</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#3b82f6">
+<meta name="theme-color" content="#111111">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -25,9 +25,9 @@
   --border: #dbe3f0;
   --text: #0f1b33;
   --muted: #5b6b86;
-  --primary: #3b82f6;
-  --primary-2: #38bdf8;
-  --primary-soft: #e0ecff;
+  --primary: #111111;
+  --primary-2: #3a3a3a;
+  --primary-soft: #ececec;
   --on-primary: #ffffff;
   --in: #0f9d6b;
   --out: #d9485f;
@@ -35,7 +35,7 @@
   --save: #0ea5e9;
   --card: #f59e0b;
   --neg: #d9485f;
-  --pos-rgb: 37, 99, 235;
+  --pos-rgb: 17, 17, 17;
   --in-rgb: 15, 157, 107;
   --on-strong: #ffffff;
   --neg-rgb: 217, 72, 95;
@@ -45,18 +45,18 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1b2840; --surface: #23324f; --surface-2: #2b3c5c; --border: #3a4d70;
-    --text: #eef3fc; --muted: #a3b3cf; --primary: #6ea2ff; --primary-2: #5ccbf5;
-    --primary-soft: #2f4775; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-    --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
+    --bg: #000000; --surface: #141414; --surface-2: #222222; --border: #333333;
+    --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
+    --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
+    --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1b2840; --surface: #23324f; --surface-2: #2b3c5c; --border: #3a4d70;
-  --text: #eef3fc; --muted: #a3b3cf; --primary: #6ea2ff; --primary-2: #5ccbf5;
-  --primary-soft: #2f4775; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-  --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 79, 140, 255; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
+  --bg: #000000; --surface: #141414; --surface-2: #222222; --border: #333333;
+  --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
+  --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
+  --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -72,8 +72,12 @@ header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srg
 .brand small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0; }
 nav.tabs { display: flex; gap: 4px; flex: 1; }
 nav.tabs a { text-decoration: none; color: var(--muted); font-weight: 600; padding: 8px 12px; border-radius: 10px; display: flex; align-items: center; gap: 7px; }
-nav.tabs a:hover { background: var(--surface-2); color: var(--text); }
-nav.tabs a.active { background: var(--primary-soft); color: var(--primary); }
+nav.tabs a { position: relative; }
+nav.tabs a:hover { background: none; color: var(--text); }
+nav.tabs a:hover::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -2px; height: 3px; border-radius: 3px; background: var(--border); }
+/* the open page is underlined, not filled */
+nav.tabs a.active { background: none; color: var(--text); position: relative; }
+nav.tabs a.active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -2px; height: 3px; border-radius: 3px; background: var(--primary); }
 nav.tabs svg { width: 17px; height: 17px; }
 .btn { border: 1px solid var(--border); background: var(--surface); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .btn:hover { background: var(--surface-2); }
@@ -130,7 +134,7 @@ table.flow td.day { background: var(--surface); }
 /* like the phone list: weekdays white, weekends light gray, today black */
 table.flow tr.weekend td.day { background: color-mix(in srgb, var(--muted) 20%, var(--surface)); }
 table.flow tr.today td:not(.bal) { background: transparent !important; }
-table.flow tr.today td.day { background: #111 !important; color: #fff; }
+table.flow tr.today td.day { background: var(--primary) !important; color: var(--on-primary); }
 table.flow tr.today td.day span { color: rgba(255, 255, 255, .8); }
 table.flow tr.today td.day::after { display: none; }
 table.flow tbody tr:hover td:not(.bal):not(.day) { background: var(--surface-2); }
@@ -144,7 +148,7 @@ table.flow th:first-child { text-align: center; }
 table.flow td.day b { display: block; font-size: 14px; }
 table.flow td.day span { display: block; margin-left: 0; font-size: 10px; }
 table.flow tr.weekend td.day b { color: var(--muted); }
-table.flow tr.today td.day b { color: #fff; }
+table.flow tr.today td.day b { color: var(--on-primary); }
 table.flow .cv { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 table.flow .cv .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; opacity: .25; }
 table.flow .cv.has .tdot { opacity: 1; }
@@ -306,15 +310,15 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .hz-month { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--border); }
 .hz-month:last-child { border-right: 0; }
 .hz-head { position: sticky; top: var(--top-h, 57px); z-index: 2; padding: 7px 4px; text-align: center; font-weight: 800; font-size: 12.5px; text-transform: lowercase; background: var(--surface-2); border-bottom: 1px solid var(--border); }
-.hz-month.current .hz-head { background: #111; color: #fff; }
+.hz-month.current .hz-head { background: var(--primary); color: var(--on-primary); }
 .hz-grid { display: grid; grid-template-columns: 26px 1fr; }
 .hz-d, .hz-v { height: 26px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 11.5px; }
 .hz-d { justify-content: center; font-weight: 700; color: var(--muted); background: var(--surface-2); }
-.hz-d.today { background: #111; color: #fff; }
+.hz-d.today { background: var(--primary); color: var(--on-primary); }
 .hz-v { justify-content: flex-end; padding: 0 7px; font-weight: 600; cursor: pointer; }
 .hz-v { font-family: Arimo, Arial, sans-serif; font-weight: 400; font-variant-numeric: tabular-nums; }
 .hz-v:not(.empty):hover { box-shadow: inset 0 0 0 2px var(--text); }
-.hz-v.today { box-shadow: inset 0 0 0 2px #111; }
+.hz-v.today { box-shadow: inset 0 0 0 2px var(--primary); }
 .hz-v.empty { cursor: default; }
 @media (max-width: 900px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -331,7 +335,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   /* the add button sits in the middle of the bottom bar instead of floating */
   .fab { display: none; }
   nav.tabs { align-items: center; }
-  .tab-add { display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; cursor: pointer; flex: none; }
+  .tab-add { display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: var(--on-primary); cursor: pointer; flex: none; }
   .tab-add svg { width: 22px; height: 22px; }
   /* exactly the bottom bar's height (measured in JS, safe area included), so the last row sits right on it */
   main { padding-bottom: var(--nav-h, calc(58px + env(safe-area-inset-bottom))); }
@@ -340,6 +344,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   nav.tabs a span { display: block; }
   /* the open page is marked by a line on the bar's top edge, not a filled icon */
   nav.tabs a.active { background: none; position: relative; }
+  nav.tabs a.active::after, nav.tabs a:hover::after { display: none; }
   nav.tabs a.active::before { content: ""; position: absolute; top: -7px; left: 4px; right: 4px; height: 3px; border-radius: 0 0 3px 3px; background: var(--primary); }
   .fab { bottom: 78px; right: 16px; }
   .range .label { min-width: 0; }
@@ -395,8 +400,8 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   body[data-route="fluxo"] .drow.weekend .dd { background: color-mix(in srgb, var(--muted) 20%, var(--surface)); }
   body[data-route="fluxo"] .drow .dd b { font-size: 16px; }
   body[data-route="fluxo"] .drow.today { background: none; }
-  body[data-route="fluxo"] .drow.today .dd { background: #111; }
-  body[data-route="fluxo"] .drow.today .dd b, body[data-route="fluxo"] .drow.today .dd span { color: #fff; }
+  body[data-route="fluxo"] .drow.today .dd { background: var(--primary); }
+  body[data-route="fluxo"] .drow.today .dd b, body[data-route="fluxo"] .drow.today .dd span { color: var(--on-primary); }
   .amt { padding: 0; border-right: 1px solid var(--border); overflow: hidden; }
   /* the column is a strip of three panes (previous · current · next type) that follows the finger */
   .phone-month { touch-action: pan-y; }
@@ -421,7 +426,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   <div class="auth-card">
     <div class="brand">
       <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient></defs>
         <rect width="48" height="48" rx="13" fill="url(#lg2)"/>
         <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
@@ -445,7 +450,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   <div class="top-inner">
     <div class="brand">
       <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient></defs>
         <rect width="48" height="48" rx="13" fill="url(#lg)"/>
         <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
