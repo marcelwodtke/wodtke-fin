@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" integrity="sha384-GFr3yTh5lJznCbZfpTtXnwboFsxqtTQoeTZCRHhE0579KrRmlCzen5AA8ohaB5ug" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #f4f7fc;
@@ -61,9 +61,9 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--text); font-family: Manrope, system-ui, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+body { background: var(--bg); color: var(--text); font-family: Nunito, system-ui, sans-serif; font-weight: 800; font-size: 14px; -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
-.num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.num { font-family: Arimo, Arial, sans-serif; font-weight: 400; font-variant-numeric: tabular-nums; font-size: 12.5px; }
 
 /* header */
 header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
@@ -146,6 +146,9 @@ table.flow .cv { display: flex; align-items: center; justify-content: space-betw
 table.flow .cv .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; opacity: .25; }
 table.flow .cv.has .tdot { opacity: 1; }
 table.flow td.bal { font-size: 13.5px; }
+/* table numbers: Arimo Regular with equal-width digits, like the phone list and Horizonte */
+table.flow td.num { font-family: Arimo, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+table.flow tbody td.num { font-weight: 400; }
 
 /* compact day list used instead of the wide table on phones */
 .dlist, .chip-legend { display: none; }
@@ -158,7 +161,7 @@ table.flow td.bal { font-size: 13.5px; }
 .drow.weekend .dd b { color: var(--muted); }
 .drow .chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .drow .none { color: color-mix(in srgb, var(--muted) 55%, transparent); font-size: 12px; }
-.chip { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); white-space: nowrap; }
+.chip { font-family: Arimo, Arial, sans-serif; font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c) 15%, transparent); color: var(--c); white-space: nowrap; }
 .chip.fc { opacity: .75; }
 .drow .db { font-weight: 700; text-align: right; white-space: nowrap; }
 .drow .db.pos { color: var(--in); }
@@ -222,11 +225,11 @@ body.locked .auth { display: flex; }
 .import-steps li { margin-bottom: 10px; }
 .import-steps .field { margin: 6px 0 0; }
 .import-steps ul { margin: 6px 0 0; padding-left: 18px; }
-.import-steps code { font-family: "JetBrains Mono", monospace; font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
+.import-steps code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
 
 /* horizon */
 .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
-.legend .lg { font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+.legend .lg { font-family: Arimo, Arial, sans-serif; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
 
 /* four balance levels used by every coloured balance cell: light up to R$ 1.000, strong beyond */
 .lv-neg2 { background: var(--neg) !important; color: var(--on-strong) !important; }
@@ -277,7 +280,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .seg button.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 .amount-input { font-size: 26px !important; font-weight: 800; letter-spacing: -.02em; }
 /* masked money fields in Ajustes: right-aligned digits, optional ± toggle on the left */
-.money-input { font-family: "JetBrains Mono", ui-monospace, monospace; text-align: right; }
+.money-input { font-family: Arimo, Arial, sans-serif; font-weight: 400; font-variant-numeric: tabular-nums; text-align: right; }
 .money-field { display: flex; gap: 6px; }
 .money-field .btn { flex: none; width: 40px; justify-content: center; font-size: 16px; padding: 0; }
 
@@ -308,6 +311,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .hz-d { justify-content: center; font-weight: 700; color: var(--muted); background: var(--surface-2); }
 .hz-d.today { background: #111; color: #fff; }
 .hz-v { justify-content: flex-end; padding: 0 7px; font-weight: 600; cursor: pointer; }
+.hz-v { font-family: Arimo, Arial, sans-serif; font-weight: 400; font-variant-numeric: tabular-nums; }
 .hz-v:not(.empty):hover { box-shadow: inset 0 0 0 2px var(--text); }
 .hz-v.today { box-shadow: inset 0 0 0 2px #111; }
 .hz-v.empty { cursor: default; }
@@ -400,9 +404,11 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .dlist.sliding .amt .track { transition: transform 140ms ease-out; }
   .pane .tdot { opacity: .25; }
   .pane.has .tdot { opacity: 1; }
-  .tval { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tval { font-family: Arimo, Arial, sans-serif; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tval.fc { opacity: .7; }
   .tval.zero { color: color-mix(in srgb, var(--muted) 45%, transparent); font-weight: 500; }
+  /* numbers in the list: Arimo Regular with equal-width digits */
+  body[data-route="fluxo"] .drow .tval, body[data-route="fluxo"] .drow .db { font-family: Arimo, Arial, sans-serif; font-weight: 400; font-variant-numeric: tabular-nums; }
   body[data-route="fluxo"] .drow .db { justify-content: flex-end; padding: 0 14px; font-size: 13.5px; }
   body[data-route="fluxo"] .drow .db.pos { background: color-mix(in srgb, var(--in) 24%, var(--surface)); color: color-mix(in srgb, var(--in) 75%, var(--text)); }
   body[data-route="fluxo"] .drow .db.neg { background: color-mix(in srgb, var(--neg) 22%, var(--surface)); color: color-mix(in srgb, var(--neg) 80%, var(--text)); }
