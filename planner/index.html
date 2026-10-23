@@ -175,6 +175,10 @@ table.flow td.bal { font-size: 13.5px; }
 .mbar-mid .icon-btn { width: 38px; height: 38px; font-size: 20px; flex: none; }
 .mbar-hz { width: 42px; height: 42px; flex: none; color: var(--muted); text-decoration: none; }
 .mbar-hz.active { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+/* phone top bar: plain icon buttons, no outline boxes */
+.mbar .cal-btn, .mbar .icon-btn { border: 0; background: transparent; }
+.mbar .icon-btn:hover, .mbar .cal-btn:hover { background: var(--surface-2); }
+.mbar .mbar-hz.active { background: var(--primary-soft); }
 
 /* login */
 body.locked header.top, body.locked main, body.locked .fab { display: none; }
@@ -256,6 +260,10 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .seg button .sw { width: 12px; height: 12px; border-radius: 50%; }
 .seg button.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 .amount-input { font-size: 26px !important; font-weight: 800; letter-spacing: -.02em; }
+/* masked money fields in Ajustes: right-aligned digits, optional ± toggle on the left */
+.money-input { font-family: "JetBrains Mono", ui-monospace, monospace; text-align: right; }
+.money-field { display: flex; gap: 6px; }
+.money-field .btn { flex: none; width: 40px; justify-content: center; font-size: 16px; padding: 0; }
 
 /* modal */
 .overlay { position: fixed; inset: 0; background: rgba(8, 15, 30, .45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
@@ -338,12 +346,11 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   body[data-route="horizonte"] .page-head [data-act="today"] { display: none; }
   /* Horizonte on phones: one column per month (Dia | Saldo), ~3 on screen, snapping sideways;
      the grid scrolls inside the free height so the month names stay pinned on top */
-  body[data-route="horizonte"] main { padding: 8px 0 0; }
+  body[data-route="horizonte"] main { padding: 8px 0 0; height: calc(100dvh - var(--top-h, 55px) - var(--nav-h, calc(58px + env(safe-area-inset-bottom)))); display: flex; flex-direction: column; }
   body[data-route="horizonte"] .page-head { margin-bottom: 8px; }
-  .hz-phone { overflow: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; max-height: calc(100dvh - var(--top-h, 55px) - 135px - env(safe-area-inset-bottom)); border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-  .hz-month { flex: 0 0 calc(100% / 3); scroll-snap-align: start; }
+  .hz-phone { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; box-shadow: none; }
+  .hz-month { flex: 1 1 0; }
   .hz-head { top: 0; font-size: 13.5px; padding: 9px 4px; }
-  .hz-month { min-width: auto; }
   .hz-grid { grid-template-columns: 30px 1fr; }
   .hz-d, .hz-v { height: 38px; font-size: 12.5px; }
   /* phone list: Dia | chosen type | Saldo, as a three-column grid with a pinned header row */
@@ -413,7 +420,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
     </div>
     <nav class="tabs" id="tabs">
       <a href="#fluxo" data-r="fluxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18M9 6v12"/></svg><span>Fluxo</span></a>
-      <a href="#horizonte" data-r="horizonte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Horizonte</span></a>
+      <a href="#horizonte" data-r="horizonte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"/><path d="M6 18a6 6 0 0 1 12 0"/><path d="M12 6V4M5.6 9.6 4.2 8.2M18.4 9.6l1.4-1.4M2.5 14h1.5M20 14h1.5"/><path d="M8 21h8"/></svg><span>Horizonte</span></a>
       <a href="#resumo" data-r="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></a>
       <button class="tab-add" type="button" data-act="newEntry" aria-label="Novo lançamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <a href="#categorias" data-r="categorias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Categorias</span></a>
@@ -427,7 +434,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
       </button>
       <div class="mbar-mid" id="mbarMid"></div>
       <a class="icon-btn mbar-hz" href="#horizonte" title="Horizonte" aria-label="Horizonte">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true"><path d="M2 18h20"/><path d="M6 18a6 6 0 0 1 12 0"/><path d="M12 6V4M5.6 9.6 4.2 8.2M18.4 9.6l1.4-1.4M2.5 14h1.5M20 14h1.5"/><path d="M8 21h8"/></svg>
       </a>
     </div>
   </div>

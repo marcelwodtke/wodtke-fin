@@ -421,12 +421,12 @@ const compact3 = v => {
 };
 
 // Horizonte grid: each month is its own column with Dia | Saldo and its name pinned on top.
-// Phones show about three months and snap month by month; the web shows all twelve side by side.
-function horizonColumns() {
+// Phones show three months (the arrows above move them); the web shows all twelve side by side.
+function horizonColumns(count = 12) {
   clampView();
   const rows = computeRows(windowEnd()), t = today(), tk = iso(t);
   const byKey = new Map(rows.map(r => [r.k, r]));
-  const months = [...Array(12)].map((_, i) => { const f = monthDate(view.y, view.m + i, 1); return { y: f.getFullYear(), m: f.getMonth() }; });
+  const months = [...Array(count)].map((_, i) => { const f = monthDate(view.y, view.m + i, 1); return { y: f.getFullYear(), m: f.getMonth() }; });
   const cols = months.map(o => {
     const current = o.y === t.getFullYear() && o.m === t.getMonth();
     let cells = '';
@@ -443,7 +443,10 @@ function horizonColumns() {
 function renderHorizon() {
   clampView();
   const range = rangeControl(`${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 11)}`);
-  if (isPhone()) { $view.innerHTML = `<div class="page-head"><div></div>${range}</div>${horizonColumns()}`; return; }
+  if (isPhone()) {
+    $view.innerHTML = `<div class="page-head"><div></div>${rangeControl(`${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 2)}`)}</div>${horizonColumns(3)}`;
+    return;
+  }
   $view.innerHTML = `<div class="page-head"><div><h1>Horizonte</h1><p>Um ano inteiro de saldos — clique num dia para ver os lançamentos.</p></div>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div class="legend"><span class="lg lv-neg2">&lt; −1.000</span><span class="lg lv-neg1">até −1.000</span><span class="lg lv-pos1">até 1.000</span><span class="lg lv-pos2">&gt; 1.000</span></div>${range}</div></div>
     ${horizonColumns()}`;
@@ -519,12 +522,14 @@ function renderSettings() {
   $view.innerHTML = `<div class="page-head"><div><h1>Ajustes</h1><p>Saldo de partida, orçamento diário, cartões e aparência.</p></div></div>
   <div class="grid two">
     <div class="panel"><h3>Ponto de partida</h3><p class="hint">O saldo na conta no início do dia escolhido.</p>
-      <div class="inline"><div class="field"><label>Saldo inicial (R$)</label><input type="number" step="0.01" id="sBal" value="${state.startBalance}"></div>
-      <div class="field"><label>Data</label><input type="date" id="sDate" value="${state.startDate}"></div></div></div>
+      <div class="inline"><div class="field"><label>Saldo inicial (R$)</label><div class="money-field"><button type="button" class="btn small" data-act="toggleSign" data-target="sBal" title="Trocar entre positivo e negativo">±</button><input type="text" inputmode="numeric" autocomplete="off" id="sBal" class="money-input" value="${maskMoney(state.startBalance)}"></div></div>
+      <div class="field"><label>Data</label><input type="date" id="sDate" value="${state.startDate}"></div></div>
+      <button class="btn primary" data-act="saveStart">Atualizar</button></div>
     <div class="panel"><h3>Orçamento diário</h3><p class="hint">Quanto você reserva por mês para gastos variáveis. Ele é descontado em cada dia futuro.</p>
-      <div class="inline"><div class="field"><label>Por mês (R$)</label><input type="number" step="0.01" id="bMonthly" value="${state.budget.monthly}"></div>
+      <div class="inline"><div class="field"><label>Por mês (R$)</label><input type="text" inputmode="numeric" autocomplete="off" id="bMonthly" class="money-input" value="${maskMoney(state.budget.monthly)}"></div>
       <div class="field"><label>Dividir por</label><select id="bDiv">${[['month', 'dias do mês'], ['28', '28 dias'], ['30', '30 dias'], ['31', '31 dias']].map(([v, l]) => `<option value="${v}" ${String(state.budget.divisor) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
-      <div class="rows"><div class="row"><div class="grow">Valor por dia (mês atual)</div><b class="num">${money(dailyBudget(today()))}</b></div></div></div>
+      <div class="rows"><div class="row"><div class="grow">Valor por dia (mês atual)</div><b class="num">${money(dailyBudget(today()))}</b></div></div>
+      <button class="btn primary" data-act="saveBudget" style="margin-top:12px">Atualizar</button></div>
     <div class="panel"><h3>Cartões de crédito</h3><p class="hint">Compras após o fechamento vão para a fatura seguinte e saem do saldo no vencimento.</p>
       <div class="rows">${state.cards.map(c => `<div class="row"><span class="sw" style="background:var(--card)"></span><div class="grow"><b>${esc(c.name)}</b><div class="sub">fecha dia ${c.close} · vence dia ${c.due}</div></div><button class="btn small danger" data-act="delCard" data-id="${c.id}">Remover</button></div>`).join('') || '<div class="empty-state">Nenhum cartão.</div>'}</div>
       <div class="inline" style="margin-top:12px"><div class="field"><label>Nome</label><input id="cName" placeholder="ex.: Cartão Black"></div><div class="field" style="flex:0 0 80px"><label>Fecha</label><input id="cClose" type="number" min="1" max="31" value="1"></div><div class="field" style="flex:0 0 80px"><label>Vence</label><input id="cDue" type="number" min="1" max="31" value="10"></div></div>
@@ -540,12 +545,17 @@ function renderSettings() {
     <div class="panel"><h3>Dados</h3><p class="hint">Seus lançamentos ficam salvos na nuvem, visíveis só para a sua conta.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="sample">Restaurar exemplo</button><button class="btn danger" data-act="wipe">Apagar todos os lançamentos</button></div></div>
   </div>`;
-  // each handler updates local state and returns the matching settings columns
-  const bind = (id, fn) => document.getElementById(id).addEventListener('change', e => { const patch = fn(e.target.value); if (patch) run(() => db.settings(patch), 'Salvo'); });
-  bind('sBal', v => { state.startBalance = +v || 0; return { start_balance: state.startBalance }; });
-  bind('sDate', v => { if (!v) return null; state.startDate = v; return { start_date: v }; });
-  bind('bMonthly', v => { state.budget.monthly = Math.max(0, +v || 0); return { budget_monthly: state.budget.monthly }; });
-  bind('bDiv', v => { state.budget.divisor = v; return { budget_divisor: v }; });
+  // money fields format themselves as you type; values are saved only with "Atualizar"
+  $view.querySelectorAll('.money-input').forEach(el => el.addEventListener('input', () => applyMoneyMask(el)));
+}
+
+// "1.234,56" as you type: digits fill in from the right, like a card machine; a leading "-" marks negatives
+const maskMoney = v => (v <= -0.005 ? '-' : '') + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const unmaskMoney = s => { const digits = String(s).replace(/\D/g, ''); const v = (parseInt(digits || '0', 10) || 0) / 100; return String(s).trim().startsWith('-') ? -v : v; };
+function applyMoneyMask(el) {
+  const neg = el.value.trim().startsWith('-'), digits = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 13);
+  el.value = digits ? (neg ? '-' : '') + maskMoney(parseInt(digits, 10) / 100) : (neg ? '-' : '');
+  el.setSelectionRange(el.value.length, el.value.length);
 }
 
 const routes = { fluxo: renderFlow, horizonte: renderHorizon, resumo: renderSummary, categorias: renderTags, ajustes: renderSettings };
@@ -813,6 +823,24 @@ document.addEventListener('click', e => {
     case 'next': shift(1); break;
     case 'today': view = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false; route(); break;
     case 'newEntry': openEntry(); break;
+    case 'toggleSign': {
+      const el = document.getElementById(a.dataset.target);
+      el.value = el.value.trim().startsWith('-') ? el.value.trim().slice(1) : '-' + el.value.trim(); applyMoneyMask(el);
+      break;
+    }
+    case 'saveStart': {
+      const bal = unmaskMoney(document.getElementById('sBal').value), date = document.getElementById('sDate').value;
+      if (!date) return toast('Informe a data');
+      state.startBalance = bal; state.startDate = date;
+      run(() => db.settings({ start_balance: bal, start_date: date }), 'Ponto de partida atualizado');
+      break;
+    }
+    case 'saveBudget': {
+      const monthly = Math.max(0, unmaskMoney(document.getElementById('bMonthly').value)), divisor = document.getElementById('bDiv').value;
+      state.budget.monthly = monthly; state.budget.divisor = divisor;
+      run(() => db.settings({ budget_monthly: monthly, budget_divisor: divisor }), 'Orçamento atualizado');
+      break;
+    }
     case 'inbox': openInbox(); break;
     case 'inboxUse': useInboxItem(a.dataset.id); break;
     case 'inboxDrop': {
