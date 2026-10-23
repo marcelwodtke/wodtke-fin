@@ -177,8 +177,9 @@ table.flow td.bal { font-size: 13.5px; }
 .mbar-hz.active { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
 /* phone top bar: plain icon buttons, no outline boxes */
 .mbar .cal-btn, .mbar .icon-btn { border: 0; background: transparent; }
-.mbar .icon-btn:hover, .mbar .cal-btn:hover { background: var(--surface-2); }
-.mbar .mbar-hz.active { background: var(--primary-soft); }
+/* tapping them never leaves a highlight: they are shortcuts, not tabs */
+.mbar .icon-btn, .mbar .cal-btn { -webkit-tap-highlight-color: transparent; }
+.mbar .icon-btn:hover, .mbar .cal-btn:hover, .mbar .mbar-hz.active { background: transparent; }
 
 /* login */
 body.locked header.top, body.locked main, body.locked .fab { display: none; }
@@ -297,14 +298,14 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .hz-month { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--border); }
 .hz-month:last-child { border-right: 0; }
 .hz-head { position: sticky; top: var(--top-h, 57px); z-index: 2; padding: 7px 4px; text-align: center; font-weight: 800; font-size: 12.5px; text-transform: lowercase; background: var(--surface-2); border-bottom: 1px solid var(--border); }
-.hz-month.current .hz-head { background: var(--primary); color: #fff; }
+.hz-month.current .hz-head { background: #111; color: #fff; }
 .hz-grid { display: grid; grid-template-columns: 26px 1fr; }
 .hz-d, .hz-v { height: 26px; display: flex; align-items: center; border-bottom: 1px solid var(--border); font-size: 11.5px; }
 .hz-d { justify-content: center; font-weight: 700; color: var(--muted); background: var(--surface-2); }
-.hz-d.today { background: var(--primary); color: #fff; }
+.hz-d.today { background: #111; color: #fff; }
 .hz-v { justify-content: flex-end; padding: 0 7px; font-weight: 600; cursor: pointer; }
 .hz-v:not(.empty):hover { box-shadow: inset 0 0 0 2px var(--text); }
-.hz-v.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.hz-v.today { box-shadow: inset 0 0 0 2px #111; }
 .hz-v.empty { cursor: default; }
 @media (max-width: 900px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
