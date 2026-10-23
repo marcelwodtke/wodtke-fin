@@ -1,6 +1,6 @@
 {
-  "name": "Wodtke Finanças",
-  "short_name": "Wodtke",
+  "name": "wmoney",
+  "short_name": "wmoney",
   "description": "Planejador de fluxo de caixa com saldo projetado dia a dia.",
   "lang": "pt-BR",
   "start_url": "./#fluxo",

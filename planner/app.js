@@ -1,4 +1,4 @@
-// Wodtke Finanças app logic (loaded by index.html).
+// wmoney app logic (loaded by index.html).
 // ---------- utilities ----------
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const money = v => brl.format(Math.abs(v) < 0.005 ? 0 : v);
@@ -1027,10 +1027,23 @@ document.addEventListener('click', e => {
     case 'theme': state.theme = a.dataset.v; rememberTheme(state.theme); applyTheme(); run(() => db.settings({ theme: state.theme })); break;
     case 'sample': if (confirm('Substituir seus dados pelo exemplo?')) { $view.innerHTML = '<div class="loading">Carregando exemplo…</div>'; run(() => db.seedSample(), 'Exemplo restaurado').then(applyTheme); } break;
     case 'wipe': if (confirm('Apagar todos os lançamentos? Cartões, categorias e ajustes ficam.')) run(() => db.wipe(), 'Lançamentos apagados'); break;
-    case 'logout': sb.auth.signOut(); break;
+    case 'logout': closeUserMenu(); sb.auth.signOut(); break;
+    case 'goSettings': closeUserMenu(); location.hash = '#ajustes'; break;
+    case 'userMenu': {
+      const pop = document.getElementById('userPop'), open = pop.hidden;
+      if (open) document.getElementById('userEmail').textContent = (user && user.email) || '';
+      pop.hidden = !open; a.setAttribute('aria-expanded', String(open));
+      break;
+    }
   }
 });
-document.getElementById('addBtn').addEventListener('click', () => openEntry());
+// the account menu closes on a click elsewhere or Escape
+function closeUserMenu() {
+  document.getElementById('userPop').hidden = true;
+  document.querySelector('[data-act="userMenu"]').setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.user-menu')) closeUserMenu(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUserMenu(); });
 
 // ---------- install as an app (PWA) ----------
 let installPrompt = null;
@@ -1038,7 +1051,7 @@ const isStandalone = () => matchMedia('(display-mode: standalone)').matches || n
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function installHelp() {
   if (isStandalone()) return '<p class="hint" style="margin:0">✓ O app já está instalado e aberto como aplicativo.</p>';
-  if (installPrompt) return '<p class="hint">Adicione o Wodtke Finanças à tela inicial e abra como um app, mesmo sem internet.</p><button class="btn primary" data-act="install">⤓ Instalar app</button>';
+  if (installPrompt) return '<p class="hint">Adicione o wmoney à tela inicial e abra como um app, mesmo sem internet.</p><button class="btn primary" data-act="install">⤓ Instalar app</button>';
   if (isIOS()) return '<p class="hint" style="margin:0">No iPhone/iPad, abra no <b>Safari</b>, toque em <b>Compartilhar</b> (□↑) e depois em <b>Adicionar à Tela de Início</b>.</p>';
   if (!window.isSecureContext) return '<p class="hint" style="margin:0">A instalação só aparece quando o app é aberto por um endereço <b>https://</b>. Publique o app num servidor com HTTPS e abra pelo celular.</p>';
   return '<p class="hint" style="margin:0">No Android, abra no <b>Chrome</b> e use o menu <b>⋮ → Instalar app</b> (ou "Adicionar à tela inicial").</p>';

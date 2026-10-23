@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Wodtke Finanças</title>
+<title>wmoney</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#111111">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Wodtke">
+<meta name="apple-mobile-web-app-title" content="wmoney">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231d4ed8'/%3E%3Cstop offset='1' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='13' fill='url(%23g)'/%3E%3Cpath d='M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4' fill='none' stroke='white' stroke-width='4.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M24 8.5v31' stroke='white' stroke-width='4.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" integrity="sha384-GFr3yTh5lJznCbZfpTtXnwboFsxqtTQoeTZCRHhE0579KrRmlCzen5AA8ohaB5ug" crossorigin="anonymous"></script>
@@ -31,9 +31,9 @@
   --on-primary: #ffffff;
   --in: #0f9d6b;
   --out: #d9485f;
-  --daily: #7c5cff;
-  --save: #0ea5e9;
-  --card: #f59e0b;
+  --daily: #eab308;
+  --save: #4ade80;
+  --card: #2563eb;
   --neg: #d9485f;
   --pos-rgb: 17, 17, 17;
   --in-rgb: 15, 157, 107;
@@ -47,16 +47,16 @@
   :root:not([data-theme="light"]) {
     --bg: #000000; --surface: #141414; --surface-2: #222222; --border: #333333;
     --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
-    --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-    --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
+    --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #facc15;
+    --save: #86efac; --card: #60a5fa; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #000000; --surface: #141414; --surface-2: #222222; --border: #333333;
   --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
-  --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #a78bfa;
-  --save: #38bdf8; --card: #fbbf24; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
+  --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #facc15;
+  --save: #86efac; --card: #60a5fa; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -68,7 +68,17 @@ button, input, select { font: inherit; color: inherit; }
 /* header */
 header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .top-inner { max-width: 1280px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 20px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; }
+.top-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.user-menu { position: relative; }
+.user-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.user-btn svg { width: 20px; height: 20px; }
+.user-btn:hover, .user-btn[aria-expanded="true"] { background: var(--surface-2); }
+.user-pop { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 32px rgba(8, 15, 30, .18); z-index: 40; }
+.user-pop[hidden] { display: none; }
+.user-email { padding: 8px 10px 10px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-pop button { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 0; background: none; border-radius: 9px; cursor: pointer; color: var(--text); }
+.user-pop button:hover { background: var(--surface-2); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 22px; letter-spacing: -.01em; white-space: nowrap; }
 .brand small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0; }
 nav.tabs { display: flex; gap: 4px; flex: 1; }
 nav.tabs a { text-decoration: none; color: var(--muted); font-weight: 600; padding: 8px 12px; border-radius: 10px; display: flex; align-items: center; gap: 7px; }
@@ -333,7 +343,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .mbar { display: flex; align-items: center; gap: 8px; width: 100%; }
   nav.tabs a[data-r="horizonte"] { display: none; }
   /* the add button sits in the middle of the bottom bar instead of floating */
-  .fab { display: none; }
+  .fab, .top-actions { display: none; }
   nav.tabs { align-items: center; }
   .tab-add { display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: var(--on-primary); cursor: pointer; flex: none; }
   .tab-add svg { width: 22px; height: 22px; }
@@ -431,7 +441,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
         <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
       </svg>
-      <div>Wodtke Finanças<small>planejador de fluxo de caixa</small></div>
+      <div>wmoney</div>
     </div>
     <h1 id="authTitle">Entrar</h1>
     <p class="lead" id="authLead">Acesse seu planejamento.</p>
@@ -455,7 +465,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
         <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
       </svg>
-      <div><span id="appName">Wodtke Finanças</span><small>planejador de fluxo de caixa</small></div>
+      <div><span id="appName">wmoney</span></div>
     </div>
     <nav class="tabs" id="tabs">
       <a href="#fluxo" data-r="fluxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18M9 6v12"/></svg><span>Saldo</span></a>
@@ -465,6 +475,20 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
       <a href="#categorias" data-r="categorias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Categorias</span></a>
       <a href="#ajustes" data-r="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></a>
     </nav>
+    <!-- web only: new entry and the account menu, on the right of the top bar -->
+    <div class="top-actions">
+      <button class="btn primary" type="button" data-act="newEntry">+ Lançar</button>
+      <div class="user-menu">
+        <button class="user-btn" type="button" data-act="userMenu" aria-haspopup="menu" aria-expanded="false" title="Conta" aria-label="Conta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        </button>
+        <div class="user-pop" id="userPop" role="menu" hidden>
+          <div class="user-email" id="userEmail"></div>
+          <button type="button" role="menuitem" data-act="goSettings">Ajustes</button>
+          <button type="button" role="menuitem" data-act="logout">Sair</button>
+        </div>
+      </div>
+    </div>
     <!-- phone-only top bar: today shortcut, month switcher (or page name), Horizonte -->
     <div class="mbar">
       <button class="cal-btn" data-act="mtoday" title="Ir para hoje" aria-label="Ir para hoje">
@@ -489,7 +513,6 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 
 <main id="view"></main>
 
-<div class="fab"><button class="btn primary" id="addBtn">+ Lançar</button></div>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
