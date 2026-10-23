@@ -11,7 +11,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="wmoney">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231d4ed8'/%3E%3Cstop offset='1' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='13' fill='url(%23g)'/%3E%3Cpath d='M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4' fill='none' stroke='white' stroke-width='4.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M24 8.5v31' stroke='white' stroke-width='4.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="icons/favicon-light.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="icons/favicon-dark.png" media="(prefers-color-scheme: dark)">
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" integrity="sha384-GFr3yTh5lJznCbZfpTtXnwboFsxqtTQoeTZCRHhE0579KrRmlCzen5AA8ohaB5ug" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,6 +42,7 @@
   --neg-rgb: 217, 72, 95;
   --shadow: 0 1px 2px rgba(15, 27, 51, .06), 0 8px 24px rgba(15, 27, 51, .06);
   --radius: 14px;
+  --logo-box: transparent; --logo-ink: #111111; --logo-pad: 0%; --logo-line: transparent;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -49,7 +51,7 @@
     --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
     --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #facc15;
     --save: #86efac; --card: #60a5fa; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark; --logo-box: #111111; --logo-ink: #ffffff; --logo-pad: 20%; --logo-line: #3a3a3a;
   }
 }
 :root[data-theme="dark"] {
@@ -57,7 +59,7 @@
   --text: #f2f2f2; --muted: #a0a0a0; --primary: #f2f2f2; --primary-2: #c8c8c8; --on-primary: #111111;
   --primary-soft: #2a2a2a; --in: #34d399; --out: #fb7185; --daily: #facc15;
   --save: #86efac; --card: #60a5fa; --neg: #fb7185; --pos-rgb: 242, 242, 242; --neg-rgb: 251, 113, 133; --in-rgb: 52, 211, 153; --on-strong: #0b1a14;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark; --logo-box: #111111; --logo-ink: #ffffff; --logo-pad: 20%; --logo-line: #3a3a3a;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -78,6 +80,9 @@ header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srg
 .user-email { padding: 8px 10px 10px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-pop button { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 0; background: none; border-radius: 9px; cursor: pointer; color: var(--text); }
 .user-pop button:hover { background: var(--surface-2); }
+/* the wmoney mark: plain black on light pages, white inside a black box on dark ones */
+.logo { width: var(--s, 34px); height: var(--s, 34px); flex: none; position: relative; border-radius: 24%; background: var(--logo-box); box-shadow: inset 0 0 0 1px var(--logo-line); }
+.logo::before { content: ""; position: absolute; inset: var(--logo-pad); background: var(--logo-ink); -webkit-mask: url(icons/mark.png) center / contain no-repeat; mask: url(icons/mark.png) center / contain no-repeat; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 22px; letter-spacing: -.01em; white-space: nowrap; }
 .brand small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0; }
 nav.tabs { display: flex; gap: 4px; flex: 1; }
@@ -435,12 +440,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 <div class="auth" id="auth">
   <div class="auth-card">
     <div class="brand">
-      <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient></defs>
-        <rect width="48" height="48" rx="13" fill="url(#lg2)"/>
-        <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
-      </svg>
+      <span class="logo" style="--s:40px" aria-hidden="true"></span>
       <div>wmoney</div>
     </div>
     <h1 id="authTitle">Entrar</h1>
@@ -459,12 +459,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 <header class="top">
   <div class="top-inner">
     <div class="brand">
-      <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient></defs>
-        <rect width="48" height="48" rx="13" fill="url(#lg)"/>
-        <path d="M31.5 16.2C30 14.3 27.3 13 24 13c-4.2 0-7.3 2.2-7.3 5.6 0 3.6 3.3 4.7 7.3 5.5s7.3 1.9 7.3 5.6c0 3.4-3.1 5.4-7.3 5.4-3.5 0-6.3-1.3-7.8-3.4" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M24 8.5v31" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
-      </svg>
+      <span class="logo" style="--s:34px" aria-hidden="true"></span>
       <div><span id="appName">wmoney</span></div>
     </div>
     <nav class="tabs" id="tabs">

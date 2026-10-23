@@ -1,8 +1,8 @@
 // Offline support: app files are fetched network-first (so new deploys show up right away)
 // and fall back to the cache when offline; Google Fonts are served cache-first.
 // Bump VERSION on each deploy to drop old caches.
-const VERSION = 'wf-v55';
-const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const VERSION = 'wf-v56';
+const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/mark.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
