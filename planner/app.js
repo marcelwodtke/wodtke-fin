@@ -569,7 +569,7 @@ function renderSummary() {
   const low = mr.reduce((a, r) => (r.bal < a.bal ? r : a), mr[0]);
   const parts = ['out', 'daily', 'save', 'card'].map(k => ({ k, v: tot(k) })).filter(p => p.v > 0);
   const upcoming = rows.filter(r => r.d > today()).slice(0, 10).flatMap(r => r.items.map(x => ({ ...x, d: r.d }))).slice(0, 8);
-  $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div><div class="head-tools">${focusControl()}<button class="btn" data-act="report" title="Gerar um PDF com o resumo do mês">⤓ Relatório PDF</button></div></div>
+  $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div>${focusControl()}</div>
   <div class="kpis">
     <div class="kpi"><div class="k">Resultado</div><div class="v ${tone(result)}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
     <div class="kpi"><div class="k">Taxa de reserva</div><div class="v">${(rate * 100).toFixed(1).replace('.', ',')}%</div><div class="s">${money(tot('save'))} guardados</div></div>
@@ -593,7 +593,9 @@ function renderSummary() {
       <h3 style="margin-top:18px">Próximos lançamentos</h3>
       <div class="rows">${upcoming.length ? upcoming.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow">${esc(x.desc || TYPES[x.e.type].label)}<div class="sub">${x.d.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num">${money(x.amt)}</b></div>`).join('') : '<div class="empty-state">Nada agendado.</div>'}</div>
     </div>
-  </div>`;
+  </div>
+  <div class="report-bar"><button class="btn primary" data-act="report">⤓ Relatório do mês em PDF</button></div>`;
+  loadPdfKit().catch(() => {}); // ready before the tap
 }
 
 // spending per category in a month (card purchases count on the purchase date), largest first
@@ -607,56 +609,126 @@ function tagSpend(y, m) {
   }
   return [...state.tags.map(t => ({ ...t, v: spend.get(t.id) || 0, c: counts.get(t.id) || 0 })), ...(spend.get('') ? [{ id: '', name: 'Sem categoria', color: '#94a3b8', v: spend.get(''), c: counts.get('') }] : [])].sort((a, b) => b.v - a.v);
 }
-// Monthly report: a printable page (the print dialog saves it as PDF) with the month's totals,
-// and spending by type and category, sized to fit on one page.
-function reportHtml(y, m) {
+// ---------- monthly report (PDF) ----------
+// jsPDF draws the one-page report. It is fetched (pinned, with SRI) when Totais opens, so the
+// button can build and share the file straight away while the tap still counts as a user action.
+const JSPDF_URL = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+const JSPDF_SRI = 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk';
+let pdfKit = null;
+function loadPdfKit() {
+  if (!pdfKit) pdfKit = Promise.all([
+    new Promise((ok, fail) => {
+      const sc = document.createElement('script');
+      sc.src = JSPDF_URL; sc.integrity = JSPDF_SRI; sc.crossOrigin = 'anonymous';
+      sc.onload = () => ok(window.jspdf.jsPDF);
+      sc.onerror = () => { pdfKit = null; sc.remove(); fail(new Error('Não foi possível carregar o gerador de PDF')); };
+      document.head.appendChild(sc);
+    }),
+    // the logo, shrunk to what an 11 mm mark needs so the PDF stays small
+    new Promise(ok => {
+      const img = new Image();
+      img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 132; c.getContext('2d').drawImage(img, 0, 0, 132, 132); ok(c.toDataURL('image/png')); };
+      img.onerror = () => ok(null);
+      img.src = 'icons/mark.png';
+    }),
+  ]).then(([jsPDF, mark]) => ({ jsPDF, mark }));
+  return pdfKit;
+}
+// the light-theme colour of each type, for the PDF
+const PDF_COLORS = { in: '#0f9d6b', out: '#d9485f', daily: '#eab308', save: '#4ade80', card: '#2563eb' };
+// the PDF's built-in font has no minus sign or narrow spaces
+const pdfText = s => String(s).replace(/[−–]/g, '-').replace(/[  ]/g, ' ');
+
+function buildReport(jsPDF, mark, y, m) {
   const rows = computeRows(monthDate(y, m, 31)), mr = monthRows(rows, y, m), t = today();
   if (!mr.length) return null;
   const tot = k => sum(mr, k), inc = tot('in'), outs = tot('out') + tot('daily') + tot('save') + tot('card');
   const first = mr[0], last = mr[mr.length - 1];
   const opening = first.bal - (first.in - first.out - first.daily - first.save - first.card);
   const low = mr.reduce((a, r) => (r.bal < a.bal ? r : a), first);
-  const pct = (v, of) => (of ? `${Math.round((v / of) * 100)}%` : '—');
+  const pct = (v, of) => (of ? `${Math.round((v / of) * 100)}%` : '');
   const tags = tagSpend(y, m).filter(x => x.v > 0), tagTotal = tags.reduce((a, x) => a + x.v, 0);
   const budget = sum(mr, 'budget');
   const dateBR = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  return `<div class="rp-head"><span class="logo" style="--s:36px" aria-hidden="true"></span><div><h1>Relatório de ${monthName(y, m)}</h1>
-      <p>wmoney · gerado em ${t.toLocaleDateString('pt-BR')}${last.d > t ? ' · inclui valores previstos até o fim do mês' : ''}</p></div></div>
-    <div class="rp-kpis">
-      <div><span>Receitas</span><b class="pos">${money(inc)}</b></div>
-      <div><span>Saídas</span><b class="neg">${money(outs)}</b></div>
-      <div><span>Resultado do mês</span><b class="${tone(inc - outs)}">${money(inc - outs)}</b></div>
-      <div><span>Guardado</span><b>${money(tot('save'))}</b><em>${pct(tot('save'), inc)} das receitas</em></div>
-    </div>
-    <div class="rp-cols">
-      <section><h2>Saldo da conta</h2><table>
-        <tr><td>Saldo no início do mês</td><td class="v ${tone(opening)}">${money(opening)}</td></tr>
-        <tr><td>Saldo no fim do mês</td><td class="v ${tone(last.bal)}">${money(last.bal)}</td></tr>
-        <tr><td>Menor saldo (${dateBR(low.d)})</td><td class="v ${tone(low.bal)}">${money(low.bal)}</td></tr>
-        <tr><td>Dias com saldo negativo</td><td class="v">${mr.filter(r => r.bal < 0).length} de ${mr.length}</td></tr>
-      </table></section>
-      <section><h2>Por tipo</h2><table>
-        ${FLOW_KEYS.map(k => `<tr><td><i style="background:${TYPES[k].color}"></i>${TYPES[k].plural}</td><td class="p">${k === 'in' ? '' : pct(tot(k), outs)}</td><td class="v">${money(tot(k))}</td></tr>`).join('')}
-        ${budget ? `<tr class="note"><td colspan="3">Diário inclui ${money(budget)} de orçamento previsto para os dias que ainda não passaram.</td></tr>` : ''}
-      </table></section>
-    </div>
-    <section><h2>Gastos por categoria</h2>${tags.length ? `<table>
-      ${tags.map(x => `<tr><td><i style="background:${x.color}"></i>${esc(x.name)}</td><td class="p">${x.c} lanç.</td><td class="p">${pct(x.v, tagTotal)}</td><td class="v">${money(x.v)}</td></tr>`).join('')}
-      <tr class="sum"><td>Total</td><td></td><td></td><td class="v">${money(tagTotal)}</td></tr></table>` : '<p class="empty">Nenhum gasto com categoria neste mês.</p>'}
-      <p class="note">Compras no cartão contam na data da compra.</p></section>`;
+  const toneColor = v => (v <= -0.005 ? PDF_COLORS.out : v >= 0.005 ? PDF_COLORS.in : '#111111');
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const L = 14, R = 196, W = R - L;
+  const text = (s, x, yy, o = {}) => {
+    doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(o.size || 10); doc.setTextColor(o.color || '#111111');
+    doc.text(pdfText(s), x, yy, { align: o.align || 'left' });
+  };
+  const dot = (x, yy, c) => { doc.setFillColor(c); doc.circle(x, yy - 1.2, 1.3, 'F'); };
+  const line = (x1, x2, yy, c = '#dddddd', w = 0.25) => { doc.setDrawColor(c); doc.setLineWidth(w); doc.line(x1, yy, x2, yy); };
+
+  // header
+  const tx = L + (mark ? 15 : 0);
+  if (mark) doc.addImage(mark, 'PNG', L, 12, 11, 11, 'mark', 'FAST');
+  text(`Relatório de ${monthName(y, m)}`, tx, 19.5, { size: 18, bold: true });
+  text(`wmoney · gerado em ${t.toLocaleDateString('pt-BR')}${last.d > t ? ' · inclui valores previstos até o fim do mês' : ''}`, tx, 25, { size: 8.5, color: '#666666' });
+  line(L, R, 29, '#111111', 0.6);
+
+  // four headline numbers
+  const kpis = [['RECEITAS', inc, PDF_COLORS.in], ['SAÍDAS', outs, PDF_COLORS.out], ['RESULTADO DO MÊS', inc - outs, toneColor(inc - outs)], ['GUARDADO', tot('save'), '#111111']];
+  const kw = (W - 3 * 4) / 4;
+  kpis.forEach(([k, v, c], i) => {
+    const x = L + i * (kw + 4);
+    doc.setDrawColor('#dddddd'); doc.setLineWidth(0.3); doc.roundedRect(x, 34, kw, 20, 2.5, 2.5, 'S');
+    text(k, x + 4, 40, { size: 7.5, color: '#666666', bold: true });
+    text(money(v), x + 4, 48, { size: 13, color: c, bold: true });
+    if (i === 3) text(`${pct(tot('save'), inc) || '0%'} das receitas`, x + 4, 52, { size: 7, color: '#666666' });
+  });
+
+  // account balance (left) and totals by type (right)
+  const colW = (W - 8) / 2, xr = L + colW + 8;
+  let yl = 64, yr = 64;
+  text('Saldo da conta', L, yl, { size: 12, bold: true }); yl += 7;
+  [['Saldo no início do mês', money(opening), toneColor(opening)], ['Saldo no fim do mês', money(last.bal), toneColor(last.bal)],
+    [`Menor saldo (${dateBR(low.d)})`, money(low.bal), toneColor(low.bal)], ['Dias com saldo negativo', `${mr.filter(r => r.bal < 0).length} de ${mr.length}`, '#111111']]
+    .forEach(([k, v, c]) => { text(k, L + 1, yl, { bold: true }); text(v, L + colW - 1, yl, { align: 'right', color: c }); line(L, L + colW, yl + 2.5); yl += 8; });
+  text('Por tipo', xr, yr, { size: 12, bold: true }); yr += 7;
+  FLOW_KEYS.forEach(k => {
+    dot(xr + 2, yr, PDF_COLORS[k]); text(TYPES[k].plural, xr + 5, yr, { bold: true });
+    if (k !== 'in') text(pct(tot(k), outs), xr + colW - 32, yr, { align: 'right', color: '#666666' });
+    text(money(tot(k)), xr + colW - 1, yr, { align: 'right' });
+    line(xr, xr + colW, yr + 2.5); yr += 8;
+  });
+  if (budget) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor('#666666');
+    doc.text(doc.splitTextToSize(pdfText(`Diário inclui ${money(budget)} de orçamento previsto para os dias que ainda não passaram.`), colW), xr, yr + 1); yr += 8;
+  }
+
+  // spending by category
+  let yy = Math.max(yl, yr) + 8;
+  text('Gastos por categoria', L, yy, { size: 12, bold: true }); yy += 7;
+  if (!tags.length) { text('Nenhum gasto com categoria neste mês.', L, yy, { color: '#666666' }); yy += 8; }
+  for (const [i, x] of tags.entries()) {
+    if (yy > 272) { text(`… e mais ${tags.length - i} categorias`, L + 1, yy, { color: '#666666', size: 9 }); yy += 8; break; }
+    dot(L + 2, yy, x.color || '#94a3b8'); text(x.name, L + 5, yy, { bold: true });
+    text(`${x.c} lanç.`, R - 62, yy, { align: 'right', color: '#666666' });
+    text(pct(x.v, tagTotal), R - 38, yy, { align: 'right', color: '#666666' });
+    text(money(x.v), R - 1, yy, { align: 'right' });
+    line(L, R, yy + 2.5); yy += 7.5;
+  }
+  if (tags.length) { line(L, R, yy - 4.4, '#999999', 0.5); text('Total', L + 1, yy + 1, { bold: true }); text(money(tagTotal), R - 1, yy + 1, { align: 'right', bold: true }); yy += 7; }
+  text('Compras no cartão contam na data da compra.', L, Math.min(yy + 1, 288), { size: 7.5, color: '#666666' });
+  return doc;
 }
-function printReport(y, m) {
-  const html = reportHtml(y, m);
-  if (!html) return toast('Sem dados para este mês');
-  let el = document.getElementById('report');
-  if (!el) { el = document.createElement('div'); el.id = 'report'; document.body.appendChild(el); }
-  el.innerHTML = html;
-  const title = document.title;
-  document.title = `wmoney - ${monthName(y, m)}`; // becomes the PDF file name
-  document.body.classList.add('printing');
-  const done = () => { document.body.classList.remove('printing'); document.title = title; window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done);
-  setTimeout(() => window.print(), 50);
+// Builds the PDF and hands it over: the share sheet on phones (save to Files, WhatsApp…), a download elsewhere.
+async function shareReport(y, m) {
+  let kit;
+  try { kit = await loadPdfKit(); } catch (err) { return toast(err.message); }
+  const doc = buildReport(kit.jsPDF, kit.mark, y, m);
+  if (!doc) return toast('Sem dados para este mês');
+  const name = `wmoney - ${monthName(y, m)}.pdf`, blob = doc.output('blob');
+  const file = new File([blob], name, { type: 'application/pdf' });
+  if (isPhone() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; }
+    catch (err) { if (err.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 function renderTags() {
   const list = tagSpend(focus.y, focus.m);
@@ -1045,7 +1117,7 @@ document.addEventListener('click', e => {
       phoneMonth = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false;
       if (document.body.dataset.route !== 'fluxo') location.hash = '#fluxo'; else route();
       break;
-    case 'report': printReport(focus.y, focus.m); break;
+    case 'report': shareReport(focus.y, focus.m); break;
     case 'fprev': fshift(-1); break;
     case 'fnext': fshift(1); break;
     case 'close': closeModal(); break;
