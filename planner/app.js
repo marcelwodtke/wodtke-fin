@@ -355,7 +355,7 @@ function dayListHtml(mr, t, type) {
     const has = Math.abs(v) >= 0.005;
     const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : `<span class="tval zero">${money(0)}</span>`;
     return `<div class="drow ${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}" data-day="${r.k}"><div class="dd"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></div>
-      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="tdot"></span>${amount}</div><div class="db num ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</div></div>`;
+      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="slide"><span class="tdot"></span>${amount}</span></div><div class="db num ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</div></div>`;
   }).join('');
 }
 
@@ -379,7 +379,7 @@ function openTypeMenu(btn) {
   menu.innerHTML = FLOW_KEYS.map(k => `<button type="button" role="option" aria-selected="${k === phoneType}" class="tm-opt${k === phoneType ? ' on' : ''}" data-v="${k}" style="--c:${TYPES[k].color}">
       <span class="tdot"></span><span class="tm-name">${TYPES[k].plural}</span>
       <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
-  menu.addEventListener('click', e => { const o = e.target.closest('.tm-opt'); if (o) { closeTypeMenu(); setPhoneType(o.dataset.v); } });
+  menu.addEventListener('click', e => { const o = e.target.closest('.tm-opt'); if (o) { closeTypeMenu(); slideToType(o.dataset.v, Math.sign(FLOW_KEYS.indexOf(o.dataset.v) - FLOW_KEYS.indexOf(phoneType))); } });
   document.body.appendChild(menu);
   btn.setAttribute('aria-expanded', 'true');
   (menu.querySelector('.on') || menu.firstElementChild).focus({ preventScroll: true });
@@ -427,14 +427,62 @@ function renderFlowPhone() {
 }
 
 
-// a sideways swipe on the list switches to the next/previous movement type (phones only)
+// switching type slides the value column: the old values leave toward the swipe and the
+// new ones come in from the other side (dir +1 = next type, -1 = previous)
+const SLIDE_MS = 170;
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+const slideWidth = list => list.querySelector('.amt')?.offsetWidth || 160;
+function setSlide(list, x, animate) {
+  list.classList.toggle('sliding', !!animate);
+  list.style.setProperty('--sx', x + 'px');
+  list.style.setProperty('--so', Math.max(0, 1 - Math.abs(x) / slideWidth(list)).toFixed(3));
+}
+let sliding = false;
+async function slideToType(type, dir) {
+  const list = document.querySelector('.phone-month .dlist');
+  if (!FLOW_KEYS.includes(type) || type === phoneType) { if (list) setSlide(list, 0, true); return; }
+  if (!list || !dir || calm.matches) return setPhoneType(type);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const w = slideWidth(list);
+  sliding = true;
+  setSlide(list, -dir * w, true); await wait(SLIDE_MS);
+  setPhoneType(type);
+  const fresh = document.querySelector('.phone-month .dlist');
+  if (fresh) {
+    setSlide(fresh, dir * w, false);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    setSlide(fresh, 0, true); await wait(SLIDE_MS);
+    fresh.classList.remove('sliding');
+  }
+  sliding = false;
+}
+
+// a sideways swipe on the list switches to the next/previous movement type (phones only);
+// the column follows the finger, and stretches only a little where there is no more type
 let swipe = null;
-document.addEventListener('touchstart', e => { swipe = isPhone() && document.body.dataset.route === 'fluxo' && e.target.closest('.phone-month') ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
-document.addEventListener('touchend', e => {
-  if (!swipe) return;
-  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y; swipe = null;
-  if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setPhoneType(FLOW_KEYS[FLOW_KEYS.indexOf(phoneType) + (dx < 0 ? 1 : -1)]);
+document.addEventListener('touchstart', e => {
+  const m = !sliding && isPhone() && document.body.dataset.route === 'fluxo' && e.target.closest('.phone-month');
+  swipe = m ? { x: e.touches[0].clientX, y: e.touches[0].clientY, list: m.querySelector('.dlist'), axis: null } : null;
 }, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!swipe || !swipe.list) return;
+  const dx = e.touches[0].clientX - swipe.x, dy = e.touches[0].clientY - swipe.y;
+  if (!swipe.axis) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; swipe.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; }
+  if (swipe.axis !== 'x') return;
+  const more = FLOW_KEYS[FLOW_KEYS.indexOf(phoneType) + (dx < 0 ? 1 : -1)];
+  setSlide(swipe.list, more ? dx : dx * 0.25, false);
+}, { passive: true });
+const endSwipe = e => {
+  if (!swipe) return;
+  const s = swipe; swipe = null;
+  if (s.axis !== 'x' || !s.list) return;
+  const dx = (e.changedTouches[0] || {}).clientX - s.x, dir = dx < 0 ? 1 : -1;
+  const next = FLOW_KEYS[FLOW_KEYS.indexOf(phoneType) + dir];
+  if (e.type === 'touchend' && Math.abs(dx) > 60 && next) slideToType(next, dir);
+  else setSlide(s.list, 0, true);
+};
+document.addEventListener('touchend', endSwipe, { passive: true });
+document.addEventListener('touchcancel', endSwipe, { passive: true });
 
 // three significant digits for the phone heat map: 6,62k · 13,4k · 123k · 341
 const compact3 = v => {

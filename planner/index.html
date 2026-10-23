@@ -383,7 +383,11 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   body[data-route="fluxo"] .drow.today { background: none; }
   body[data-route="fluxo"] .drow.today .dd { background: var(--primary); }
   body[data-route="fluxo"] .drow.today .dd b, body[data-route="fluxo"] .drow.today .dd span { color: #fff; }
-  .amt { justify-content: space-between; gap: 8px; padding: 0 12px; border-right: 1px solid var(--border); }
+  .amt { padding: 0 12px; border-right: 1px solid var(--border); overflow: hidden; }
+  /* the type's values slide sideways as one column (follows the finger, then leaves/enters) */
+  .phone-month { touch-action: pan-y; }
+  .amt .slide { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; transform: translateX(var(--sx, 0px)); opacity: var(--so, 1); }
+  .dlist.sliding .amt .slide { transition: transform .17s ease-out, opacity .17s ease-out; }
   .amt .tdot { opacity: .25; }
   .amt.has .tdot { opacity: 1; }
   .tval { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
