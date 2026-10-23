@@ -434,6 +434,45 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   body[data-route="fluxo"] .drow .db.pos { background: color-mix(in srgb, var(--in) 24%, var(--surface)); color: color-mix(in srgb, var(--in) 75%, var(--text)); }
   body[data-route="fluxo"] .drow .db.neg { background: color-mix(in srgb, var(--neg) 22%, var(--surface)); color: color-mix(in srgb, var(--neg) 80%, var(--text)); }
 }
+/* Totais: month picker and the report button side by side */
+.head-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* monthly report: only shown when printing (the print dialog saves it as PDF), always in light colours */
+#report { display: none; }
+@media print {
+  /* no page margin: browsers then leave out their date / title / URL header and footer */
+  @page { size: A4; margin: 0; }
+  body.printing > *:not(#report) { display: none !important; }
+  body.printing { background: #fff !important; }
+  body.printing #report { display: block; }
+  #report {
+    --text: #111111; --muted: #666666; --border: #dddddd; --in: #0f9d6b; --out: #d9485f; --daily: #eab308; --save: #4ade80; --card: #2563eb; --neg: #d9485f;
+    --logo-box: transparent; --logo-ink: #111111; --logo-pad: 0%; --logo-line: transparent;
+    color: var(--text); font-size: 11.5pt; padding: 14mm 12mm; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  #report h1 { font-size: 18pt; margin: 0; }
+  #report h2 { font-size: 12.5pt; margin: 0 0 6px; }
+  #report p { margin: 2px 0 0; color: var(--muted); font-size: 9.5pt; font-weight: 600; }
+  #report section { margin-top: 18px; break-inside: avoid-page; }
+  #report .rp-head { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 2px solid #111; }
+  #report .rp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+  #report .rp-kpis > div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  #report .rp-kpis span { display: block; font-size: 9pt; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  #report .rp-kpis b { display: block; font-family: Arimo, Arial, sans-serif; font-size: 15pt; margin-top: 2px; }
+  #report .rp-kpis em { display: block; font-style: normal; font-size: 8.5pt; color: var(--muted); }
+  #report .rp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  #report table { width: 100%; border-collapse: collapse; }
+  #report td, #report th { padding: 5px 6px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  #report th { font-size: 8.5pt; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  #report .v { text-align: right; white-space: nowrap; font-family: Arimo, Arial, sans-serif; font-weight: 400; }
+  #report .p { text-align: right; color: var(--muted); white-space: nowrap; font-weight: 600; }
+  #report .sum td { font-weight: 900; border-bottom: 0; border-top: 2px solid var(--border); }
+  #report .sum .v { font-weight: 700; }
+  #report .note td, #report p.note { font-size: 8.5pt; color: var(--muted); font-weight: 600; }
+  #report .empty { color: var(--muted); }
+  #report i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  #report .pos { color: var(--in); } #report .neg { color: var(--neg); }
+}
 </style>
 </head>
 <body class="locked">

@@ -569,7 +569,7 @@ function renderSummary() {
   const low = mr.reduce((a, r) => (r.bal < a.bal ? r : a), mr[0]);
   const parts = ['out', 'daily', 'save', 'card'].map(k => ({ k, v: tot(k) })).filter(p => p.v > 0);
   const upcoming = rows.filter(r => r.d > today()).slice(0, 10).flatMap(r => r.items.map(x => ({ ...x, d: r.d }))).slice(0, 8);
-  $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div>${focusControl()}</div>
+  $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div><div class="head-tools">${focusControl()}<button class="btn" data-act="report" title="Gerar um PDF com o resumo do mês">⤓ Relatório PDF</button></div></div>
   <div class="kpis">
     <div class="kpi"><div class="k">Resultado</div><div class="v ${tone(result)}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
     <div class="kpi"><div class="k">Taxa de reserva</div><div class="v">${(rate * 100).toFixed(1).replace('.', ',')}%</div><div class="s">${money(tot('save'))} guardados</div></div>
@@ -596,15 +596,70 @@ function renderSummary() {
   </div>`;
 }
 
-function renderTags() {
-  const end = monthDate(focus.y, focus.m, 31), L = buildLedger(monthDate(focus.y, focus.m + 2, 31));
+// spending per category in a month (card purchases count on the purchase date), largest first
+function tagSpend(y, m) {
+  const L = buildLedger(monthDate(y, m + 2, 31));
   const spend = new Map(), counts = new Map();
   for (const b of L.values()) for (const x of b.items) {
     if (x.e.type === 'in') continue;
-    const p = x.purchase; if (p.getFullYear() !== focus.y || p.getMonth() !== focus.m) continue;
+    const p = x.purchase; if (p.getFullYear() !== y || p.getMonth() !== m) continue;
     const id = x.e.tagId || ''; spend.set(id, (spend.get(id) || 0) + x.amt); counts.set(id, (counts.get(id) || 0) + 1);
   }
-  const list = [...state.tags.map(t => ({ ...t, v: spend.get(t.id) || 0, c: counts.get(t.id) || 0 })), ...(spend.get('') ? [{ id: '', name: 'Sem categoria', color: '#94a3b8', v: spend.get(''), c: counts.get('') }] : [])].sort((a, b) => b.v - a.v);
+  return [...state.tags.map(t => ({ ...t, v: spend.get(t.id) || 0, c: counts.get(t.id) || 0 })), ...(spend.get('') ? [{ id: '', name: 'Sem categoria', color: '#94a3b8', v: spend.get(''), c: counts.get('') }] : [])].sort((a, b) => b.v - a.v);
+}
+// Monthly report: a printable page (the print dialog saves it as PDF) with the month's totals,
+// and spending by type and category, sized to fit on one page.
+function reportHtml(y, m) {
+  const rows = computeRows(monthDate(y, m, 31)), mr = monthRows(rows, y, m), t = today();
+  if (!mr.length) return null;
+  const tot = k => sum(mr, k), inc = tot('in'), outs = tot('out') + tot('daily') + tot('save') + tot('card');
+  const first = mr[0], last = mr[mr.length - 1];
+  const opening = first.bal - (first.in - first.out - first.daily - first.save - first.card);
+  const low = mr.reduce((a, r) => (r.bal < a.bal ? r : a), first);
+  const pct = (v, of) => (of ? `${Math.round((v / of) * 100)}%` : '—');
+  const tags = tagSpend(y, m).filter(x => x.v > 0), tagTotal = tags.reduce((a, x) => a + x.v, 0);
+  const budget = sum(mr, 'budget');
+  const dateBR = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  return `<div class="rp-head"><span class="logo" style="--s:36px" aria-hidden="true"></span><div><h1>Relatório de ${monthName(y, m)}</h1>
+      <p>wmoney · gerado em ${t.toLocaleDateString('pt-BR')}${last.d > t ? ' · inclui valores previstos até o fim do mês' : ''}</p></div></div>
+    <div class="rp-kpis">
+      <div><span>Receitas</span><b class="pos">${money(inc)}</b></div>
+      <div><span>Saídas</span><b class="neg">${money(outs)}</b></div>
+      <div><span>Resultado do mês</span><b class="${tone(inc - outs)}">${money(inc - outs)}</b></div>
+      <div><span>Guardado</span><b>${money(tot('save'))}</b><em>${pct(tot('save'), inc)} das receitas</em></div>
+    </div>
+    <div class="rp-cols">
+      <section><h2>Saldo da conta</h2><table>
+        <tr><td>Saldo no início do mês</td><td class="v ${tone(opening)}">${money(opening)}</td></tr>
+        <tr><td>Saldo no fim do mês</td><td class="v ${tone(last.bal)}">${money(last.bal)}</td></tr>
+        <tr><td>Menor saldo (${dateBR(low.d)})</td><td class="v ${tone(low.bal)}">${money(low.bal)}</td></tr>
+        <tr><td>Dias com saldo negativo</td><td class="v">${mr.filter(r => r.bal < 0).length} de ${mr.length}</td></tr>
+      </table></section>
+      <section><h2>Por tipo</h2><table>
+        ${FLOW_KEYS.map(k => `<tr><td><i style="background:${TYPES[k].color}"></i>${TYPES[k].plural}</td><td class="p">${k === 'in' ? '' : pct(tot(k), outs)}</td><td class="v">${money(tot(k))}</td></tr>`).join('')}
+        ${budget ? `<tr class="note"><td colspan="3">Diário inclui ${money(budget)} de orçamento previsto para os dias que ainda não passaram.</td></tr>` : ''}
+      </table></section>
+    </div>
+    <section><h2>Gastos por categoria</h2>${tags.length ? `<table>
+      ${tags.map(x => `<tr><td><i style="background:${x.color}"></i>${esc(x.name)}</td><td class="p">${x.c} lanç.</td><td class="p">${pct(x.v, tagTotal)}</td><td class="v">${money(x.v)}</td></tr>`).join('')}
+      <tr class="sum"><td>Total</td><td></td><td></td><td class="v">${money(tagTotal)}</td></tr></table>` : '<p class="empty">Nenhum gasto com categoria neste mês.</p>'}
+      <p class="note">Compras no cartão contam na data da compra.</p></section>`;
+}
+function printReport(y, m) {
+  const html = reportHtml(y, m);
+  if (!html) return toast('Sem dados para este mês');
+  let el = document.getElementById('report');
+  if (!el) { el = document.createElement('div'); el.id = 'report'; document.body.appendChild(el); }
+  el.innerHTML = html;
+  const title = document.title;
+  document.title = `wmoney - ${monthName(y, m)}`; // becomes the PDF file name
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); document.title = title; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 50);
+}
+function renderTags() {
+  const list = tagSpend(focus.y, focus.m);
   const total = list.reduce((a, t) => a + t.v, 0), max = Math.max(1, ...list.map(t => t.v));
   $view.innerHTML = `<div class="page-head"><div><h1>Categorias</h1><p>Gastos do mês por categoria (compras no cartão contam na data da compra).</p></div>${focusControl()}</div>
   <div class="grid two">
@@ -990,6 +1045,7 @@ document.addEventListener('click', e => {
       phoneMonth = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false;
       if (document.body.dataset.route !== 'fluxo') location.hash = '#fluxo'; else route();
       break;
+    case 'report': printReport(focus.y, focus.m); break;
     case 'fprev': fshift(-1); break;
     case 'fnext': fshift(1); break;
     case 'close': closeModal(); break;
