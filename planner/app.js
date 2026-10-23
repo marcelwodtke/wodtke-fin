@@ -429,7 +429,7 @@ function renderFlowPhone() {
 
 // switching type slides the value column: the old values leave toward the swipe and the
 // new ones come in from the other side (dir +1 = next type, -1 = previous)
-const SLIDE_MS = 170;
+const SLIDE_MS = 90;
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const slideWidth = list => list.querySelector('.amt')?.offsetWidth || 160;
 function setSlide(list, x, animate) {

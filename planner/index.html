@@ -387,7 +387,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   /* the type's values slide sideways as one column (follows the finger, then leaves/enters) */
   .phone-month { touch-action: pan-y; }
   .amt .slide { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; transform: translateX(var(--sx, 0px)); opacity: var(--so, 1); }
-  .dlist.sliding .amt .slide { transition: transform .17s ease-out, opacity .17s ease-out; }
+  .dlist.sliding .amt .slide { transition: transform 90ms ease-out, opacity 90ms ease-out; }
   .amt .tdot { opacity: .25; }
   .amt.has .tdot { opacity: 1; }
   .tval { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
