@@ -359,14 +359,39 @@ function dayListHtml(mr, t, type) {
   }).join('');
 }
 
-// Fluxo list column header: Dia | type selector | Saldo (a native select keeps the picker accessible)
+// Fluxo list column header: Dia | type picker | Saldo. The picker opens the app's own menu (see openTypeMenu).
 function flowListHead() {
   return `<div class="list-head"><span>Dia</span>
-    <label class="type-pick" style="--c:${TYPES[phoneType].color}"><span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
+    <button type="button" class="type-pick" style="--c:${TYPES[phoneType].color}" data-act="typeMenu" aria-haspopup="listbox" aria-expanded="false" aria-label="Tipo de lançamento: ${TYPES[phoneType].plural}">
+      <span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      <select data-ptype aria-label="Tipo de lançamento">${FLOW_KEYS.map(k => `<option value="${k}" ${k === phoneType ? 'selected' : ''}>${TYPES[k].plural}</option>`).join('')}</select></label>
+    </button>
     <span>Saldo</span></div>`;
 }
+
+// Type menu: a small card under the picker with each type's colour dot and a check on the current one.
+function openTypeMenu(btn) {
+  closeTypeMenu();
+  const r = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.className = 'type-menu'; menu.id = 'typeMenu'; menu.setAttribute('role', 'listbox');
+  menu.style.top = `${Math.round(r.bottom + 6)}px`; menu.style.left = `${Math.round(Math.max(8, r.left))}px`;
+  menu.innerHTML = FLOW_KEYS.map(k => `<button type="button" role="option" aria-selected="${k === phoneType}" class="tm-opt${k === phoneType ? ' on' : ''}" data-v="${k}" style="--c:${TYPES[k].color}">
+      <span class="tdot"></span><span class="tm-name">${TYPES[k].plural}</span>
+      <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
+  menu.addEventListener('click', e => { const o = e.target.closest('.tm-opt'); if (o) { closeTypeMenu(); setPhoneType(o.dataset.v); } });
+  document.body.appendChild(menu);
+  btn.setAttribute('aria-expanded', 'true');
+  (menu.querySelector('.on') || menu.firstElementChild).focus({ preventScroll: true });
+}
+function closeTypeMenu() {
+  const m = document.getElementById('typeMenu'); if (!m) return;
+  m.remove(); document.querySelectorAll('.type-pick[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+// close on a tap outside, on scroll, or with Escape
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#typeMenu, .type-pick')) closeTypeMenu(); }, true);
+window.addEventListener('scroll', closeTypeMenu, { passive: true });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTypeMenu(); });
 
 // Which movement type the Fluxo list shows; remembered on this device.
 let phoneType = (() => { try { const v = localStorage.getItem(KEY + ':phoneType'); return FLOW_KEYS.includes(v) ? v : 'in'; } catch (_) { return 'in'; } })();
@@ -401,7 +426,6 @@ function renderFlowPhone() {
   else if (!row) window.scrollTo(0, 0);
 }
 
-document.addEventListener('change', e => { if (e.target.matches('select[data-ptype]')) setPhoneType(e.target.value); });
 
 // a sideways swipe on the list switches to the next/previous movement type (phones only)
 let swipe = null;
@@ -559,9 +583,30 @@ function applyMoneyMask(el) {
 }
 
 const routes = { fluxo: renderFlow, horizonte: renderHorizon, resumo: renderSummary, categorias: renderTags, ajustes: renderSettings };
+// Horizonte icon: a 3×3 mini heat map of the next 9 days (today first, reading order), each square
+// in the balance level of that day. Before any data is loaded it shows neutral squares.
+const LEVEL_FILL = {
+  'lv-neg2': 'var(--neg)', 'lv-neg1': 'color-mix(in srgb, var(--neg) 38%, var(--surface))',
+  'lv-pos1': 'color-mix(in srgb, var(--in) 38%, var(--surface))', 'lv-pos2': 'var(--in)', '': 'var(--border)',
+};
+function horizonIcon(size = 20) {
+  const t = today(), byKey = user ? new Map(computeRows(addDays(t, 8)).map(r => [r.k, r])) : new Map();
+  const cells = [...Array(9)].map((_, i) => {
+    const r = byKey.get(iso(addDays(t, i))), fill = LEVEL_FILL[r ? level(r.bal) : ''];
+    return `<rect x="${1.5 + (i % 3) * 7.5}" y="${1.5 + Math.floor(i / 3) * 7.5}" width="6" height="6" rx="1.6" style="fill:${fill}"/>`;
+  }).join('');
+  return `<svg class="hz-icon" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${cells}</svg>`;
+}
+function updateHorizonIcons() {
+  document.querySelector('.mbar-hz').innerHTML = horizonIcon(22);
+  const tab = document.querySelector('nav.tabs a[data-r="horizonte"] svg');
+  if (tab) tab.outerHTML = horizonIcon(17);
+}
+
 // Phone top bar: calendar (go to today), month switcher on Fluxo (page name elsewhere), Horizonte shortcut.
 const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Resumo', categorias: 'Categorias', ajustes: 'Ajustes' };
 function updatePhoneBar(name) {
+  updateHorizonIcons();
   document.querySelector('.mbar-hz').classList.toggle('active', name === 'horizonte');
   document.getElementById('mbarMid').innerHTML = name === 'fluxo'
     ? `<button class="icon-btn" data-act="mprev" title="Mês anterior">‹</button><h2>${monthName(phoneMonth.y, phoneMonth.m)}</h2><button class="icon-btn" data-act="mnext" title="Próximo mês">›</button>`
@@ -823,6 +868,7 @@ document.addEventListener('click', e => {
     case 'next': shift(1); break;
     case 'today': view = { y: today().getFullYear(), m: today().getMonth() }; renderFlow.scrolled = false; route(); break;
     case 'newEntry': openEntry(); break;
+    case 'typeMenu': if (document.getElementById('typeMenu')) closeTypeMenu(); else openTypeMenu(a); break;
     case 'toggleSign': {
       const el = document.getElementById(a.dataset.target);
       el.value = el.value.trim().startsWith('-') ? el.value.trim().slice(1) : '-' + el.value.trim(); applyMoneyMask(el);
