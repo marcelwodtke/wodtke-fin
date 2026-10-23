@@ -562,6 +562,10 @@ function updatePhoneBar(name) {
 function setTopBarHeight() {
   const h = document.querySelector('header.top').offsetHeight;
   if (h) document.documentElement.style.setProperty('--top-h', h + 'px');
+  // on phones the tab bar is fixed at the bottom; reserve exactly its height below the content
+  const nav = document.getElementById('tabs');
+  if (isPhone() && nav.offsetHeight) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+  else document.documentElement.style.removeProperty('--nav-h');
 }
 window.addEventListener('resize', setTopBarHeight);
 // switch between the phone (one month) and desktop (12 months) layouts when the width crosses the breakpoint
