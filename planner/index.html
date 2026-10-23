@@ -328,6 +328,9 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); justify-content: space-around; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 25; }
   nav.tabs a { flex-direction: column; gap: 2px; font-size: 10.5px; padding: 6px; }
   nav.tabs a span { display: block; }
+  /* the open page is marked by a line on the bar's top edge, not a filled icon */
+  nav.tabs a.active { background: none; position: relative; }
+  nav.tabs a.active::before { content: ""; position: absolute; top: -7px; left: 4px; right: 4px; height: 3px; border-radius: 0 0 3px 3px; background: var(--primary); }
   .fab { bottom: 78px; right: 16px; }
   .range .label { min-width: 0; }
   .seg { grid-template-columns: repeat(3, 1fr); }
@@ -378,10 +381,11 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
   body[data-route="fluxo"] .drow { padding: 0; gap: 0; min-height: 48px; align-items: stretch; }
   body[data-route="fluxo"] .drow > div { display: flex; align-items: center; min-width: 0; }
-  body[data-route="fluxo"] .drow .dd { width: auto; flex-direction: column; justify-content: center; border-right: 1px solid var(--border); background: var(--surface-2); }
+  body[data-route="fluxo"] .drow .dd { width: auto; flex-direction: column; justify-content: center; border-right: 1px solid var(--border); background: var(--surface); }
+  body[data-route="fluxo"] .drow.weekend .dd { background: color-mix(in srgb, var(--muted) 20%, var(--surface)); }
   body[data-route="fluxo"] .drow .dd b { font-size: 16px; }
   body[data-route="fluxo"] .drow.today { background: none; }
-  body[data-route="fluxo"] .drow.today .dd { background: var(--primary); }
+  body[data-route="fluxo"] .drow.today .dd { background: #111; }
   body[data-route="fluxo"] .drow.today .dd b, body[data-route="fluxo"] .drow.today .dd span { color: #fff; }
   .amt { padding: 0; border-right: 1px solid var(--border); overflow: hidden; }
   /* the column is a strip of three panes (previous · current · next type) that follows the finger */
@@ -437,9 +441,9 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
       <div><span id="appName">Wodtke Finanças</span><small>planejador de fluxo de caixa</small></div>
     </div>
     <nav class="tabs" id="tabs">
-      <a href="#fluxo" data-r="fluxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18M9 6v12"/></svg><span>Fluxo</span></a>
+      <a href="#fluxo" data-r="fluxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18M9 6v12"/></svg><span>Saldo</span></a>
       <a href="#horizonte" data-r="horizonte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"/><path d="M6 18a6 6 0 0 1 12 0"/><path d="M12 6V4M5.6 9.6 4.2 8.2M18.4 9.6l1.4-1.4M2.5 14h1.5M20 14h1.5"/><path d="M8 21h8"/></svg><span>Horizonte</span></a>
-      <a href="#resumo" data-r="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Resumo</span></a>
+      <a href="#resumo" data-r="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Totais</span></a>
       <button class="tab-add" type="button" data-act="newEntry" aria-label="Novo lançamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <a href="#categorias" data-r="categorias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Categorias</span></a>
       <a href="#ajustes" data-r="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></a>

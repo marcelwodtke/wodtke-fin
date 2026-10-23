@@ -319,7 +319,7 @@ function renderFlow() {
   const neg = win.filter(r => r.bal < 0).length;
   const last = win[win.length - 1];
   const label = `${monthShort(view.y, view.m)} – ${monthShort(view.y, view.m + 11)}`;
-  let html = `<div class="page-head"><div><h1>Fluxo diário</h1><p>Saldo projetado dia a dia pelos próximos 12 meses.</p></div>${rangeControl(label)}</div>
+  let html = `<div class="page-head"><div><h1>Saldo diário</h1><p>Saldo projetado dia a dia pelos próximos 12 meses.</p></div>${rangeControl(label)}</div>
   <div class="kpis">
     <div class="kpi"><div class="k">Saldo hoje</div><div class="v ${todayRow ? tone(todayRow.bal) : ''}">${todayRow ? money(todayRow.bal) : '—'}</div><div class="s">${t.toLocaleDateString('pt-BR')}</div></div>
     <div class="kpi"><div class="k">Menor saldo</div><div class="v ${tone(lowest.bal)}">${money(lowest.bal)}</div><div class="s">em ${lowest.d.toLocaleDateString('pt-BR')}</div></div>
@@ -545,14 +545,14 @@ function focusRows() {
 
 function renderSummary() {
   const { rows } = focusRows(), mr = monthRows(rows, focus.y, focus.m);
-  if (!mr.length) { $view.innerHTML = `<div class="page-head"><div><h1>Resumo do mês</h1></div>${focusControl()}</div><div class="panel empty-state">Sem dados antes da data inicial (${parse(state.startDate).toLocaleDateString('pt-BR')}).</div>`; return; }
+  if (!mr.length) { $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1></div>${focusControl()}</div><div class="panel empty-state">Sem dados antes da data inicial (${parse(state.startDate).toLocaleDateString('pt-BR')}).</div>`; return; }
   const tot = k => sum(mr, k), inc = tot('in'), outs = tot('out') + tot('daily') + tot('save') + tot('card');
   const result = inc - outs, life = tot('out') + tot('daily') + tot('card');
   const rate = inc ? tot('save') / inc : 0;
   const low = mr.reduce((a, r) => (r.bal < a.bal ? r : a), mr[0]);
   const parts = ['out', 'daily', 'save', 'card'].map(k => ({ k, v: tot(k) })).filter(p => p.v > 0);
   const upcoming = rows.filter(r => r.d > today()).slice(0, 10).flatMap(r => r.items.map(x => ({ ...x, d: r.d }))).slice(0, 8);
-  $view.innerHTML = `<div class="page-head"><div><h1>Resumo do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div>${focusControl()}</div>
+  $view.innerHTML = `<div class="page-head"><div><h1>Totais do mês</h1><p>Inclui lançamentos realizados e previstos.</p></div>${focusControl()}</div>
   <div class="kpis">
     <div class="kpi"><div class="k">Resultado</div><div class="v ${tone(result)}">${money(result)}</div><div class="s">receitas − todas as saídas</div></div>
     <div class="kpi"><div class="k">Taxa de reserva</div><div class="v">${(rate * 100).toFixed(1).replace('.', ',')}%</div><div class="s">${money(tot('save'))} guardados</div></div>
@@ -663,7 +663,7 @@ function updateHorizonIcons() {
 }
 
 // Phone top bar: calendar (go to today), month switcher on Fluxo (page name elsewhere), Horizonte shortcut.
-const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Resumo', categorias: 'Categorias', ajustes: 'Ajustes' };
+const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Totais', categorias: 'Categorias', ajustes: 'Ajustes' };
 function updatePhoneBar(name) {
   updateHorizonIcons();
   document.querySelector('.mbar-hz').classList.toggle('active', name === 'horizonte');
@@ -839,7 +839,7 @@ function importHelp() {
           <li><code>p_merchant</code> → <b>Entrada do Atalho → Comerciante</b> (Merchant)</li>
           <li><code>p_card</code> → <b>Entrada do Atalho → Cartão ou Passe</b> (Card or Pass)</li>
         </ul></li>
-      <li>Salve e faça uma compra com Apple Pay. Ela aparece no <b>Fluxo</b> como “compra importada”.</li>
+      <li>Salve e faça uma compra com Apple Pay. Ela aparece no <b>Saldo</b> como “compra importada”.</li>
     </ol>
     <p class="hint">O código só permite <b>enviar</b> compras para revisão; ele não dá acesso aos seus dados. Se perder o celular, gere um novo ou desative.</p>` : '';
   return status + code + steps + `<div style="display:flex;gap:8px;flex-wrap:wrap">
