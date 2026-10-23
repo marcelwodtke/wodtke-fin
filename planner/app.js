@@ -349,13 +349,20 @@ function renderFlow() {
 
 // compact day list for one movement type: the day, that type's amount, and the closing balance
 function dayListHtml(mr, t, type) {
-  return mr.map(r => {
-    const wk = [0, 6].includes(r.d.getDay()), v = r[type];
-    const fc = type === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
-    const has = Math.abs(v) >= 0.005;
+  // the column holds the neighbour types on each side, so a drag already shows the next one
+  const i = FLOW_KEYS.indexOf(type);
+  const sides = [paneOverride?.[-1] ?? FLOW_KEYS[i - 1], type, paneOverride?.[1] ?? FLOW_KEYS[i + 1]];
+  const pane = (r, ty) => {
+    if (!ty) return '<span class="pane"></span>';
+    const v = r[ty], has = Math.abs(v) >= 0.005;
+    const fc = ty === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
     const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : `<span class="tval zero">${money(0)}</span>`;
+    return `<span class="pane${has ? ' has' : ''}" style="--c:${TYPES[ty].color}"><span class="tdot"></span>${amount}</span>`;
+  };
+  return mr.map(r => {
+    const wk = [0, 6].includes(r.d.getDay());
     return `<div class="drow ${r.k === iso(t) ? 'today' : ''} ${wk ? 'weekend' : ''}" data-day="${r.k}"><div class="dd"><b>${r.d.getDate()}</b><span>${weekday(r.d)}</span></div>
-      <div class="amt${has ? ' has' : ''}" style="--c:${TYPES[type].color}"><span class="slide"><span class="tdot"></span>${amount}</span></div><div class="db num ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</div></div>`;
+      <div class="amt"><span class="track">${sides.map(ty => pane(r, ty)).join('')}</span></div><div class="db num ${tone(r.bal)} ${level(r.bal)}">${money(r.bal)}</div></div>`;
   }).join('');
 }
 
@@ -429,30 +436,34 @@ function renderFlowPhone() {
 
 // switching type slides the value column: the old values leave toward the swipe and the
 // new ones come in from the other side (dir +1 = next type, -1 = previous)
-const SLIDE_MS = 90;
+const SLIDE_MS = 140;
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const slideWidth = list => list.querySelector('.amt')?.offsetWidth || 160;
 function setSlide(list, x, animate) {
   list.classList.toggle('sliding', !!animate);
   list.style.setProperty('--sx', x + 'px');
-  list.style.setProperty('--so', Math.max(0, 1 - Math.abs(x) / slideWidth(list)).toFixed(3));
 }
-let sliding = false;
+let sliding = false, paneOverride = null; // paneOverride: { [-1|1]: type } shown beside the column instead of the neighbour
 async function slideToType(type, dir) {
   const list = document.querySelector('.phone-month .dlist');
   if (!FLOW_KEYS.includes(type) || type === phoneType) { if (list) setSlide(list, 0, true); return; }
   if (!list || !dir || calm.matches) return setPhoneType(type);
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const w = slideWidth(list);
+  const w = slideWidth(list), from = phoneType;
   sliding = true;
-  setSlide(list, -dir * w, true); await wait(SLIDE_MS);
-  setPhoneType(type);
-  const fresh = document.querySelector('.phone-month .dlist');
-  if (fresh) {
+  if (FLOW_KEYS.indexOf(type) - FLOW_KEYS.indexOf(from) === dir) {
+    // the next type is already beside the column: finish the slide, then redraw centred on it
+    setSlide(list, -dir * w, true); await wait(SLIDE_MS);
+    setPhoneType(type);
+  } else {
+    // a jump from the menu: draw the new type with the old one beside it, then slide across
+    paneOverride = { [-dir]: from }; setPhoneType(type);
+    const fresh = document.querySelector('.phone-month .dlist');
     setSlide(fresh, dir * w, false);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     setSlide(fresh, 0, true); await wait(SLIDE_MS);
-    fresh.classList.remove('sliding');
+    paneOverride = null;
+    const y = window.scrollY; renderFlow(); window.scrollTo(0, y);
   }
   sliding = false;
 }
