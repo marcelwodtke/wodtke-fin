@@ -1027,7 +1027,6 @@ function installHelp() {
   return '<p class="hint" style="margin:0">No Android, abra no <b>Chrome</b> e use o menu <b>⋮ → Instalar app</b> (ou "Adicionar à tela inicial").</p>';
 }
 function refreshInstallUI() {
-  document.querySelectorAll('.install-btn').forEach(b => b.classList.toggle('show', !!installPrompt && !isStandalone()));
   if ((location.hash || '').slice(1) === 'ajustes') renderSettings();
 }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; refreshInstallUI(); });
