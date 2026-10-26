@@ -233,6 +233,11 @@ body.locked .auth { display: flex; }
 .tm-opt .tm-name { flex: 1; }
 .tm-opt .tm-check { color: var(--primary); visibility: hidden; }
 .tm-opt.on .tm-check { visibility: visible; }
+/* the same menu for every form select */
+.pick-menu { z-index: 120; overflow-y: auto; max-width: calc(100vw - 16px); }
+.pick-menu .tm-opt { font-size: 14.5px; padding: 10px 12px; }
+.pick-menu .tm-opt.on { background: var(--surface-2); }
+.pick-menu .tm-opt[disabled] { opacity: .45; cursor: default; }
 
 /* imported Apple Pay purchases waiting for review */
 .inbox-banner { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; margin: 0 0 16px; border: 0; border-radius: var(--radius); background: var(--primary); color: var(--on-primary); cursor: pointer; font: inherit; }
@@ -503,6 +508,12 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .tag-row:hover { background: var(--surface-2); }
 .tag-del { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .tag-del h3 { margin: 0 0 4px; font-size: 14px; }
+
+/* selects look like the app's fields everywhere (no system arrows), with the app's own chevron;
+   on touch screens taps pass through them and open the app menu (see openPickMenu) */
+select:not([data-native]) { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; padding-right: 32px !important; text-overflow: ellipsis; }
+select:not([data-native])[aria-expanded="true"] { border-color: var(--primary); }
+@media (pointer: coarse) { select:not([data-native]) { pointer-events: none; } }
 </style>
 </head>
 <body class="locked">

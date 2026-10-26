@@ -438,6 +438,65 @@ function closeTypeMenu() {
   const m = document.getElementById('typeMenu'); if (!m) return;
   m.remove(); document.querySelectorAll('.type-pick[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
+// Every <select> opens the app's own menu instead of the browser's list. The select stays in the page
+// (it shows the value and keeps its events), the browser popup is just never shown.
+function openPickMenu(sel) {
+  closePickMenu();
+  const r = sel.getBoundingClientRect(), opts = [...sel.options].filter(o => !o.hidden);
+  const menu = document.createElement('div');
+  menu.className = 'type-menu pick-menu'; menu.id = 'pickMenu'; menu.setAttribute('role', 'listbox');
+  menu.style.minWidth = `${Math.round(Math.max(180, r.width))}px`;
+  menu.innerHTML = opts.map(o => `<button type="button" role="option" aria-selected="${o.selected}" class="tm-opt${o.selected ? ' on' : ''}" data-v="${esc(o.value)}" ${o.disabled ? 'disabled' : ''} style="--c:var(--text)">
+      <span class="tm-name">${esc(o.textContent)}</span>
+      <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
+  document.body.appendChild(menu);
+  // below the field, or above it when there is no room; never wider than the screen
+  const h = menu.offsetHeight, w = menu.offsetWidth, below = innerHeight - r.bottom - 8, above = r.top - 8;
+  const up = below < Math.min(h, 260) && above > below;
+  menu.style.maxHeight = `${Math.max(160, Math.floor(up ? above : below) - 6)}px`;
+  menu.style.top = up ? `${Math.round(Math.max(8, r.top - 6 - Math.min(h, above)))}px` : `${Math.round(r.bottom + 6)}px`;
+  menu.style.left = `${Math.round(Math.min(Math.max(8, r.left), innerWidth - w - 8))}px`;
+  menu.addEventListener('click', e => {
+    const o = e.target.closest('.tm-opt'); if (!o || o.disabled) return;
+    closePickMenu();
+    if (sel.value !== o.dataset.v) { sel.value = o.dataset.v; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    sel.focus({ preventScroll: true });
+  });
+  pickFor = sel; sel.setAttribute('aria-expanded', 'true');
+  (menu.querySelector('.on') || menu.querySelector('.tm-opt:not([disabled])'))?.focus({ preventScroll: true });
+}
+let pickFor = null;
+function closePickMenu() {
+  document.getElementById('pickMenu')?.remove();
+  if (pickFor) { pickFor.setAttribute('aria-expanded', 'false'); pickFor = null; }
+}
+const pickable = t => t instanceof HTMLSelectElement && !t.multiple && !t.disabled && !t.hasAttribute('data-native');
+// mouse: stop the native list on press; touch: stop it on release (that is when phones open it)
+document.addEventListener('mousedown', e => { if (pickable(e.target)) { e.preventDefault(); if (pickFor === e.target) closePickMenu(); else openPickMenu(e.target); } }, true);
+document.addEventListener('touchend', e => { if (pickable(e.target)) { e.preventDefault(); openPickMenu(e.target); } }, { capture: true, passive: false });
+// On touch screens the CSS lets taps pass through selects (so iOS never opens its own picker);
+// a tap that lands on a select's box opens the app menu instead.
+document.addEventListener('click', e => {
+  if (!matchMedia('(pointer: coarse)').matches || e.target.closest('#pickMenu')) return;
+  const hit = [...document.querySelectorAll('select')].find(s => {
+    if (!pickable(s) || !s.offsetParent) return false;
+    const r = s.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  });
+  if (hit) { e.preventDefault(); e.stopPropagation(); openPickMenu(hit); }
+}, true);
+document.addEventListener('keydown', e => {
+  if (pickable(e.target) && (e.key === 'Enter' || e.key === ' ' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); openPickMenu(e.target); }
+  else if (e.key === 'Escape' && pickFor) { e.stopPropagation(); const s = pickFor; closePickMenu(); s.focus(); }
+  else if (pickFor && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const items = [...document.querySelectorAll('#pickMenu .tm-opt:not([disabled])')], k = items.indexOf(document.activeElement);
+    items[Math.max(0, Math.min(items.length - 1, k + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus(); e.preventDefault();
+  }
+}, true);
+document.addEventListener('pointerdown', e => { if (pickFor && !e.target.closest('#pickMenu') && e.target !== pickFor) closePickMenu(); }, true);
+window.addEventListener('resize', closePickMenu);
+document.addEventListener('scroll', e => { if (pickFor && !(e.target.closest && e.target.closest('#pickMenu'))) closePickMenu(); }, true);
+
 // close on a tap outside, on scroll, or with Escape
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#typeMenu, .type-pick')) closeTypeMenu(); }, true);
 window.addEventListener('scroll', closeTypeMenu, { passive: true });
