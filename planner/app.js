@@ -471,23 +471,71 @@ function closePickMenu() {
   document.getElementById('pickMenu')?.remove();
   if (pickFor) { pickFor.setAttribute('aria-expanded', 'false'); pickFor = null; }
 }
-const pickable = t => t instanceof HTMLSelectElement && !t.multiple && !t.disabled && !t.hasAttribute('data-native');
+const datable = t => t instanceof HTMLInputElement && (t.type === 'date' || t.type === 'month') && !t.disabled && !t.hasAttribute('data-native');
+const pickable = t => (t instanceof HTMLSelectElement && !t.multiple && !t.disabled && !t.hasAttribute('data-native')) || datable(t);
+const openPicker = el => (datable(el) ? openCalendar(el) : openPickMenu(el));
+
+// Calendar for date fields and a month grid for month fields, in the app's menu style.
+const WEEK_PT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'], MONTH_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function openCalendar(input) {
+  closePickMenu();
+  const isMonth = input.type === 'month', now = today();
+  const cur = input.value ? (isMonth ? parse(input.value + '-01') : parse(input.value)) : null;
+  let view = new Date((cur || now).getFullYear(), (cur || now).getMonth(), 1, 12);
+  const menu = document.createElement('div');
+  menu.className = 'type-menu pick-menu cal-menu'; menu.id = 'pickMenu'; menu.setAttribute('role', 'dialog');
+  const nav = (label, extra = '') => `<div class="cal-head"><button type="button" class="cal-nav" data-cal="-1" aria-label="Anterior">‹</button><b ${extra}>${label}</b><button type="button" class="cal-nav" data-cal="1" aria-label="Próximo">›</button></div>`;
+  const draw = () => {
+    if (isMonth) {
+      const y = view.getFullYear();
+      menu.innerHTML = nav(String(y)) + `<div class="cal-months">${MONTH_SHORT.map((m, i) => {
+        const on = cur && cur.getFullYear() === y && cur.getMonth() === i, isNow = now.getFullYear() === y && now.getMonth() === i;
+        return `<button type="button" class="cal-cell${on ? ' on' : ''}${isNow ? ' now' : ''}" data-v="${y}-${pad(i + 1)}">${m}</button>`;
+      }).join('')}</div><div class="cal-foot"><button type="button" class="cal-link" data-v="${now.getFullYear()}-${pad(now.getMonth() + 1)}">Este mês</button></div>`;
+    } else {
+      const y = view.getFullYear(), m = view.getMonth(), start = new Date(y, m, 1 - new Date(y, m, 1, 12).getDay(), 12);
+      let cells = '';
+      for (let k = 0; k < 42; k++) {
+        const d = addDays(start, k), key = iso(d);
+        cells += `<button type="button" class="cal-cell${d.getMonth() !== m ? ' out' : ''}${cur && key === iso(cur) ? ' on' : ''}${key === iso(now) ? ' now' : ''}" data-v="${key}">${d.getDate()}</button>`;
+      }
+      const label = monthName(y, m);
+      menu.innerHTML = nav(label.charAt(0).toUpperCase() + label.slice(1)) + `<div class="cal-week">${WEEK_PT.map(w => `<span>${w}</span>`).join('')}</div><div class="cal-days">${cells}</div>
+        <div class="cal-foot"><button type="button" class="cal-link" data-v="${iso(now)}">Hoje</button></div>`;
+    }
+  };
+  draw();
+  menu.addEventListener('click', e => {
+    const n = e.target.closest('[data-cal]');
+    if (n) { view = isMonth ? new Date(view.getFullYear() + +n.dataset.cal, 0, 1, 12) : new Date(view.getFullYear(), view.getMonth() + +n.dataset.cal, 1, 12); draw(); return; }
+    const c = e.target.closest('[data-v]'); if (!c) return;
+    closePickMenu();
+    if (input.value !== c.dataset.v) { input.value = c.dataset.v; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (!matchMedia('(pointer: coarse)').matches) input.focus({ preventScroll: true });
+  });
+  document.body.appendChild(menu);
+  const r = input.getBoundingClientRect(), h = menu.offsetHeight, w = menu.offsetWidth;
+  const up = innerHeight - r.bottom - 8 < h && r.top - 8 > innerHeight - r.bottom - 8;
+  menu.style.top = `${Math.round(up ? Math.max(8, r.top - 6 - h) : r.bottom + 6)}px`;
+  menu.style.left = `${Math.round(Math.min(Math.max(8, r.left), innerWidth - w - 8))}px`;
+  pickFor = input; input.setAttribute('aria-expanded', 'true');
+}
 // mouse: stop the native list on press; touch: stop it on release (that is when phones open it)
-document.addEventListener('mousedown', e => { if (pickable(e.target)) { e.preventDefault(); if (pickFor === e.target) closePickMenu(); else openPickMenu(e.target); } }, true);
-document.addEventListener('touchend', e => { if (pickable(e.target)) { e.preventDefault(); openPickMenu(e.target); } }, { capture: true, passive: false });
+document.addEventListener('mousedown', e => { if (pickable(e.target)) { e.preventDefault(); if (pickFor === e.target) closePickMenu(); else openPicker(e.target); } }, true);
+document.addEventListener('touchend', e => { if (pickable(e.target)) { e.preventDefault(); openPicker(e.target); } }, { capture: true, passive: false });
 // On touch screens the CSS lets taps pass through selects (so iOS never opens its own picker);
 // a tap that lands on a select's box opens the app menu instead.
 document.addEventListener('click', e => {
   if (!matchMedia('(pointer: coarse)').matches || e.target.closest('#pickMenu')) return;
-  const hit = [...document.querySelectorAll('select')].find(s => {
+  const hit = [...document.querySelectorAll('select, input[type="date"], input[type="month"]')].find(s => {
     if (!pickable(s) || !s.offsetParent) return false;
     const r = s.getBoundingClientRect();
     return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   });
-  if (hit) { e.preventDefault(); e.stopPropagation(); openPickMenu(hit); }
+  if (hit) { e.preventDefault(); e.stopPropagation(); openPicker(hit); }
 }, true);
 document.addEventListener('keydown', e => {
-  if (pickable(e.target) && (e.key === 'Enter' || e.key === ' ' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); openPickMenu(e.target); }
+  if (pickable(e.target) && (e.key === 'Enter' || e.key === ' ' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); openPicker(e.target); }
   else if (e.key === 'Escape' && pickFor) { e.stopPropagation(); const s = pickFor; closePickMenu(); s.focus(); }
   else if (pickFor && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     const items = [...document.querySelectorAll('#pickMenu .tm-opt:not([disabled])')], k = items.indexOf(document.activeElement);
