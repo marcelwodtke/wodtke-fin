@@ -120,6 +120,7 @@ const IMPORT_URL = () => `${(window.WF_CONFIG || {}).supabaseUrl}/rest/v1/rpc/wf
 
 // What a new entry from an imported purchase should start as: a remembered rule for the
 // merchant wins; otherwise a Wallet card whose name matches one of the user's cards; otherwise Diário.
+// The category comes from the rule or, failing that, from similar past entries (guessTag, invoice.js).
 function importDefaults(item) {
   const rule = state.rules.find(r => r.key === merchantKey(item.merchant));
   const card = item.card && state.cards.find(c => {
@@ -129,7 +130,7 @@ function importDefaults(item) {
   let type = rule ? rule.type : card ? 'card' : 'daily';
   let cardId = rule && rule.cardId ? rule.cardId : card ? card.id : '';
   if (type === 'card' && !state.cards.some(c => c.id === cardId)) { type = 'daily'; cardId = ''; }
-  return { type, amount: item.amount, desc: item.merchant, date: item.date, tagId: rule ? rule.tagId : '', cardId };
+  return { type, amount: item.amount, desc: item.merchant, date: item.date, tagId: (rule && rule.tagId) || guessTag(item.merchant), cardId };
 }
 
 const db = {
@@ -766,6 +767,7 @@ function renderSettings() {
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
+    <div class="panel" style="grid-column:1/-1"><h3>Importar fatura do cartão</h3><p class="hint">Leia o PDF da fatura e compare com o que já está lançado.</p><a class="btn primary" href="#importar" style="text-decoration:none">Abrir Importar</a></div>
     <div class="panel" style="grid-column:1/-1"><h3>Importar compras do Apple Pay</h3>${importHelp()}</div>
     <div class="panel"><h3>Conta</h3><p class="hint">Conectado como <b>${esc(user?.email || '')}</b>.</p>
       <button class="btn" data-act="logout">Sair da conta</button></div>
@@ -785,7 +787,7 @@ function applyMoneyMask(el) {
   el.setSelectionRange(el.value.length, el.value.length);
 }
 
-const routes = { fluxo: renderFlow, horizonte: renderHorizon, resumo: renderSummary, categorias: renderTags, ajustes: renderSettings };
+const routes = { fluxo: renderFlow, horizonte: renderHorizon, resumo: renderSummary, categorias: renderTags, ajustes: renderSettings, importar: () => renderImport() };
 // Horizonte icon: a 3×3 mini heat map of the next 9 days (today first, reading order), each square
 // in the balance level of that day. Before any data is loaded it shows neutral squares.
 const LEVEL_FILL = {
@@ -807,7 +809,7 @@ function updateHorizonIcons() {
 }
 
 // Phone top bar: calendar (go to today), month switcher on Fluxo (page name elsewhere), Horizonte shortcut.
-const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Totais', categorias: 'Categorias', ajustes: 'Ajustes' };
+const PAGE_NAMES = { horizonte: 'Horizonte', resumo: 'Totais', categorias: 'Categorias', ajustes: 'Ajustes', importar: 'Importar' };
 function updatePhoneBar(name) {
   updateHorizonIcons();
   document.querySelector('.mbar-hz').classList.toggle('active', name === 'horizonte');
@@ -955,7 +957,7 @@ function openSeriesChoice(mode, e, od) {
       else openEntry(null, e);
     } else if (v === 'one') { closeModal(); run(() => db.setException({ entryId: e.id, od, action: 'skip' }), 'Ocorrência pulada'); }
     else if (v === 'next' && !first) { closeModal(); run(() => db.endSeries(e.id, iso(addDays(parse(od), -1))), 'Série encerrada antes desta data'); }
-    else if (confirm(`Excluir "${e.desc || TYPES[e.type].label}" e todas as ocorrências?`)) { closeModal(); run(() => db.delEntry(e.id), 'Série excluída'); }
+    else ask(`Excluir "${e.desc || TYPES[e.type].label}" e todas as ocorrências?`, { ok: 'Excluir', danger: true }).then(yes => { if (yes) { closeModal(); run(() => db.delEntry(e.id), 'Série excluída'); } });
   }));
 }
 
@@ -1059,6 +1061,23 @@ function openOccurrence(e, od) {
 
 // ---------- events ----------
 const toastEl = document.getElementById('toast');
+// App-styled replacement for confirm(): resolves true on the main button, false on Voltar, Escape or a tap outside.
+// opts.ok names the main button; opts.danger paints it red for destructive actions.
+function ask(message, opts = {}) {
+  return new Promise(done => {
+    const [title, ...rest] = String(message).split('\n\n');
+    const el = document.createElement('div');
+    el.className = 'ask-overlay';
+    el.innerHTML = `<div class="ask-card" role="alertdialog" aria-modal="true" aria-labelledby="askTitle"><p class="ask-title" id="askTitle">${esc(title)}</p>${rest.length ? `<p class="ask-text">${esc(rest.join('\n\n'))}</p>` : ''}
+      <div class="ask-actions"><button class="btn" data-ask="0">${esc(opts.cancel || 'Voltar')}</button><button class="btn ${opts.danger ? 'danger-solid' : 'primary'}" data-ask="1">${esc(opts.ok || 'Confirmar')}</button></div></div>`;
+    const finish = v => { document.removeEventListener('keydown', onKey, true); el.remove(); done(v); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(false); } };
+    el.addEventListener('click', e => { const b = e.target.closest('[data-ask]'); if (b) finish(b.dataset.ask === '1'); else if (e.target === el) finish(false); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(el);
+    el.querySelector('[data-ask="1"]').focus();
+  });
+}
 function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.classList.remove('show'), 1800); }
 function applyTheme() { if (state.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', state.theme); }
 
@@ -1091,21 +1110,23 @@ document.addEventListener('click', e => {
       run(() => db.settings({ budget_monthly: monthly, budget_divisor: divisor }), 'Orçamento atualizado');
       break;
     }
-    case 'inbox': openInbox(); break;
+    case 'inbox': location.hash = '#importar'; break;
     case 'inboxUse': useInboxItem(a.dataset.id); break;
     case 'inboxDrop': {
       const item = state.inbox.find(x => x.id === a.dataset.id);
-      if (item && confirm(`Descartar a compra "${item.merchant || 'Apple Pay'}" de ${money(item.amount)}?`)) {
-        run(() => db.finishInbox(item.id, 'discarded'), 'Compra descartada').then(() => { if (state.inbox.length) openInbox(); else closeModal(); });
-      }
+      if (item) ask(`Descartar a compra "${item.merchant || 'Apple Pay'}" de ${money(item.amount)}?`, { ok: 'Descartar', danger: true }).then(yes => {
+        if (!yes) return;
+        const inModal = overlay.classList.contains('open');
+        run(() => db.finishInbox(item.id, 'discarded'), 'Compra descartada').then(() => { if (!inModal) return; if (state.inbox.length) openInbox(); else closeModal(); });
+      });
       break;
     }
     case 'genToken':
-      if (state.importToken && !confirm('Gerar um novo código? O atalho que usa o código atual para de funcionar até você trocar por este.')) break;
-      run(async () => { importTokenShown = await db.rotateImportToken(); }, 'Código gerado');
+      (state.importToken ? ask('Gerar um novo código?\n\nO atalho que usa o código atual para de funcionar até você trocar por este.', { ok: 'Gerar código' }) : Promise.resolve(true))
+        .then(yes => { if (yes) run(async () => { importTokenShown = await db.rotateImportToken(); }, 'Código gerado'); });
       break;
     case 'revokeToken':
-      if (confirm('Desativar a importação? O atalho do iPhone para de funcionar.')) run(async () => { await db.revokeImportToken(); importTokenShown = ''; }, 'Importação desativada');
+      ask('Desativar a importação?\n\nO atalho do iPhone para de funcionar.', { ok: 'Desativar', danger: true }).then(yes => { if (yes) run(async () => { await db.revokeImportToken(); importTokenShown = ''; }, 'Importação desativada'); });
       break;
     case 'copy': {
       const el = document.getElementById(a.dataset.target);
@@ -1130,15 +1151,15 @@ document.addEventListener('click', e => {
       const en = state.entries.find(x => x.id === a.dataset.id); if (!en) break;
       if (en.repeat !== 'none') { openSeriesChoice(act === 'editOcc' ? 'edit' : 'delete', en, a.dataset.od); break; }
       if (act === 'editOcc') openEntry(null, en);
-      else if (confirm(`Excluir "${en.desc || TYPES[en.type].label}"?`)) { closeModal(); run(() => db.delEntry(en.id), 'Excluído'); }
+      else ask(`Excluir "${en.desc || TYPES[en.type].label}"?`, { ok: 'Excluir', danger: true }).then(yes => { if (yes) { closeModal(); run(() => db.delEntry(en.id), 'Excluído'); } });
       break;
     }
     case 'restoreOcc': closeModal(); run(() => db.clearException(a.dataset.id, a.dataset.od), 'Ocorrência restaurada'); break;
     case 'delEntry': {
       const en = state.entries.find(x => x.id === a.dataset.id);
-      if (en && confirm(en.repeat !== 'none' ? `Excluir "${en.desc || TYPES[en.type].label}" e todas as repetições?` : `Excluir "${en.desc || TYPES[en.type].label}"?`)) {
-        closeModal(); run(() => db.delEntry(en.id), 'Excluído');
-      } break;
+      if (en) ask(en.repeat !== 'none' ? `Excluir "${en.desc || TYPES[en.type].label}" e todas as repetições?` : `Excluir "${en.desc || TYPES[en.type].label}"?`, { ok: 'Excluir', danger: true })
+        .then(yes => { if (yes) { closeModal(); run(() => db.delEntry(en.id), 'Excluído'); } });
+      break;
     }
     case 'addTag': {
       const n = document.getElementById('tagName').value.trim(); if (!n) return toast('Dê um nome à categoria');
@@ -1151,11 +1172,12 @@ document.addEventListener('click', e => {
       run(() => db.addCard({ name: n.slice(0, 60), close: c, due: d }), 'Cartão adicionado'); break;
     }
     case 'delCard':
-      if (state.entries.some(x => x.cardId === a.dataset.id) && !confirm('Este cartão tem lançamentos. Removê-lo também exclui essas compras. Continuar?')) break;
-      run(() => db.delCard(a.dataset.id), 'Cartão removido'); break;
+      (state.entries.some(x => x.cardId === a.dataset.id) ? ask('Remover este cartão?\n\nEle tem lançamentos, e removê-lo também exclui essas compras.', { ok: 'Remover', danger: true }) : Promise.resolve(true))
+        .then(yes => { if (yes) run(() => db.delCard(a.dataset.id), 'Cartão removido'); });
+      break;
     case 'theme': state.theme = a.dataset.v; rememberTheme(state.theme); applyTheme(); run(() => db.settings({ theme: state.theme })); break;
-    case 'sample': if (confirm('Substituir seus dados pelo exemplo?')) { $view.innerHTML = '<div class="loading">Carregando exemplo…</div>'; run(() => db.seedSample(), 'Exemplo restaurado').then(applyTheme); } break;
-    case 'wipe': if (confirm('Apagar todos os lançamentos? Cartões, categorias e ajustes ficam.')) run(() => db.wipe(), 'Lançamentos apagados'); break;
+    case 'sample': ask('Substituir seus dados pelo exemplo?', { ok: 'Substituir', danger: true }).then(yes => { if (yes) { $view.innerHTML = '<div class="loading">Carregando exemplo…</div>'; run(() => db.seedSample(), 'Exemplo restaurado').then(applyTheme); } }); break;
+    case 'wipe': ask('Apagar todos os lançamentos?\n\nCartões, categorias e ajustes ficam.', { ok: 'Apagar', danger: true }).then(yes => { if (yes) run(() => db.wipe(), 'Lançamentos apagados'); }); break;
     case 'logout': closeUserMenu(); sb.auth.signOut(); break;
     case 'goSettings': closeUserMenu(); location.hash = '#ajustes'; break;
     case 'userMenu': {

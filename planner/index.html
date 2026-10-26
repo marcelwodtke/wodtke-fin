@@ -349,7 +349,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .top-inner { gap: 10px; padding: 8px 10px; }
   header.top .brand { display: none; }
   .mbar { display: flex; align-items: center; gap: 8px; width: 100%; }
-  nav.tabs a[data-r="horizonte"] { display: none; }
+  nav.tabs a[data-r="horizonte"], nav.tabs a[data-r="importar"] { display: none; }
   /* the add button sits in the middle of the bottom bar instead of floating */
   .fab, .top-actions { display: none; }
   nav.tabs { align-items: center; }
@@ -440,6 +440,53 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 /* Totais: the monthly PDF report button, under the panels */
 .report-bar { display: flex; justify-content: center; margin: 18px 0 8px; }
 .report-bar .btn { padding: 11px 18px; font-size: 14.5px; }
+
+/* Importar: invoice reader */
+.inv-form { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px; align-items: end; }
+.inv-file .btn { justify-content: center; height: 42px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.inv-pass { align-items: end; }
+.inv-map { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 4px 0 12px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 12px; font-size: 12.5px; color: var(--muted); }
+.inv-map label { display: flex; align-items: center; gap: 6px; }
+.inv-map select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 5px 6px; max-width: 220px; }
+.inv-sum { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 6px 0 12px; font-size: 13px; color: var(--muted); }
+.inv-sum b { color: var(--text); }
+.chip-s { display: inline-block; font-style: normal; font-size: 11.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text); }
+.chip-s.ok { background: color-mix(in srgb, var(--in) 16%, var(--surface)); color: color-mix(in srgb, var(--in) 70%, var(--text)); }
+.chip-s.diff { background: color-mix(in srgb, var(--daily) 22%, var(--surface)); color: color-mix(in srgb, var(--daily) 45%, var(--text)); }
+.chip-s.new { background: var(--primary); color: var(--on-primary); }
+.chip-s.credit, .chip-s.fee { color: var(--muted); }
+.inv-row.st-fee { color: var(--muted); }
+.inv-table { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.inv-head, .inv-row { display: grid; grid-template-columns: 116px minmax(140px, 1fr) 50px 94px 122px minmax(0, 132px) 122px; gap: 8px; align-items: center; padding: 6px 10px; }
+.inv-head { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; background: var(--surface); border-bottom: 1px solid var(--border); }
+.inv-row { border-top: 1px solid var(--border); }
+.inv-row:first-of-type { border-top: 0; }
+.inv-row input, .inv-row select { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 8px; min-width: 0; width: 100%; height: 34px; }
+.inv-row.st-ok, .inv-row.st-credit { color: var(--muted); }
+.inv-row input.inv-parc { text-align: center; font-family: Arimo, Arial, sans-serif; font-weight: 400; padding: 6px 4px; }
+.inv-st { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.inv-st small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-extra { cursor: pointer; }
+.inv-apply { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.inv-text { margin-top: 12px; max-height: 320px; overflow: auto; font-size: 11.5px; background: var(--surface-2); padding: 10px; border-radius: 10px; white-space: pre-wrap; }
+@media (max-width: 900px) {
+  .inv-form { grid-template-columns: 1fr; }
+  .inv-head { display: none; }
+  /* phones: date, installment and value on one line, the description under it, then status and what to do */
+  .inv-row { grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr); grid-template-areas: "date parc amount" "desc desc desc" "tag tag tag" "st st act"; padding: 10px; gap: 6px 8px; }
+  .inv-row .inv-tag { grid-area: tag; }
+  .inv-row [data-f="date"] { grid-area: date; } .inv-row [data-f="desc"] { grid-area: desc; } .inv-row .inv-parc { grid-area: parc; }
+  .inv-row [data-f="amount"] { grid-area: amount; } .inv-row .inv-st { grid-area: st; } .inv-row [data-f="action"] { grid-area: act; }
+}
+
+/* app-styled confirm dialog (ask) */
+.ask-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .45); animation: tm-in .12s ease-out; }
+.ask-card { width: 100%; max-width: 380px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 18px; padding: 20px 20px 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.ask-title { margin: 0; font-size: 16px; font-weight: 900; }
+.ask-text { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 700; white-space: pre-line; }
+.ask-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.ask-actions .btn { padding: 10px 16px; }
+.btn.danger-solid { background: var(--neg); border-color: var(--neg); color: #fff; }
 </style>
 </head>
 <body class="locked">
@@ -474,6 +521,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
       <a href="#resumo" data-r="resumo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Totais</span></a>
       <button class="tab-add" type="button" data-act="newEntry" aria-label="Novo lançamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <a href="#categorias" data-r="categorias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Categorias</span></a>
+      <a href="#importar" data-r="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9m0 0-3.5-3.5M12 12l3.5-3.5"/><path d="M3 13.5h4.5l1.5 2.5h6l1.5-2.5H21"/><path d="M5 9.5 3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5l-2-4"/></svg><span>Importar</span></a>
       <a href="#ajustes" data-r="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></a>
     </nav>
     <!-- web only: new entry and the account menu, on the right of the top bar -->
@@ -518,6 +566,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 
+<script src="invoice.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

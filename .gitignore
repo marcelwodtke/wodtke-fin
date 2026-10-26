@@ -8,3 +8,9 @@ node_modules/
 
 # leftover from an interrupted clone, not part of the app
 rea/
+
+# sample invoices the owner shares for testing: private, never commit
+csv/
+*.csv
+pdf/
+planner/_sample*
