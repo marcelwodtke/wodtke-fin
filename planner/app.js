@@ -214,6 +214,10 @@ const db = {
   delCard: async id => { await must(sb.from('wf_cards').delete().eq('id', id)); state.cards = state.cards.filter(c => c.id !== id); state.entries = state.entries.filter(x => x.cardId !== id); pruneExceptions(); },
   wipe: async () => { await must(sb.from('wf_entries').delete().eq('user_id', user.id)); state.entries = []; state.exceptions = []; },
   // replace everything with the sample data set, remapping its local ids to database ids
+  // backups: the list, a copy taken now, and putting one back (see the wf_backups migration)
+  listBackups: () => must(sb.from('wf_backups').select('id, day, kind, entries, created_at').order('created_at', { ascending: false }).limit(100)),
+  backupNow: () => must(sb.rpc('wf_backup_now')),
+  restoreBackup: async id => { const r = await must(sb.rpc('wf_restore_backup', { p_id: id })); await loadAll(); return r; },
   seedSample: async () => {
     const s = sampleState();
     await must(sb.from('wf_entries').delete().eq('user_id', user.id));
@@ -900,6 +904,10 @@ function renderSettings() {
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
+    <div class="panel" style="grid-column:1/-1"><h3>Backups</h3>
+      <p class="hint">Uma cópia de tudo (lançamentos, categorias, cartões e ajustes) é guardada automaticamente todo dia às 3h, e fica disponível por 60 dias. Você pode voltar para qualquer uma delas.</p>
+      <button class="btn" data-act="backupNow">Fazer backup agora</button>
+      <div id="bkList" class="rows bk-list"><div class="empty-state">Carregando backups…</div></div></div>
     <div class="panel" style="grid-column:1/-1"><h3>Importar fatura do cartão</h3><p class="hint">Leia o PDF da fatura e compare com o que já está lançado.</p><a class="btn primary" href="#importar" style="text-decoration:none">Abrir Importar</a></div>
     <div class="panel" style="grid-column:1/-1"><h3>Importar compras do Apple Pay</h3>${importHelp()}</div>
     <div class="panel"><h3>Conta</h3><p class="hint">Conectado como <b>${esc(user?.email || '')}</b>.</p>
@@ -908,6 +916,7 @@ function renderSettings() {
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="sample">Restaurar exemplo</button><button class="btn danger" data-act="wipe">Apagar todos os lançamentos</button></div></div>
   </div>`;
   // money fields format themselves as you type; values are saved only with "Atualizar"
+  fillBackups();
 }
 
 // "1.234,56" as you type: digits fill in from the right, like a card machine; a leading "-" marks negatives
@@ -1136,6 +1145,21 @@ function inboxBanner() {
   return `<button class="inbox-banner" data-act="inbox"><span class="ib-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9m0 0-3.5-3.5M12 12l3.5-3.5"/><path d="M3 13.5h4.5l1.5 2.5h6l1.5-2.5H21"/><path d="M5 9.5 3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5l-2-4"/></svg></span><span class="ib-txt"><b>${n} compra${n === 1 ? '' : 's'} importada${n === 1 ? '' : 's'}</b><small>Apple Pay · ${money(total)}</small></span><span class="ib-go">Revisar <span aria-hidden="true">›</span></span></button>`;
 }
 
+// Backups list in Ajustes, filled after the page draws (it comes from the server)
+const BACKUP_KIND = { daily: 'automático', manual: 'feito por você', before_restore: 'antes de restaurar' };
+async function fillBackups() {
+  const el = document.getElementById('bkList'); if (!el) return;
+  let list;
+  try { list = await db.listBackups(); } catch (err) { el.innerHTML = '<div class="empty-state">Não foi possível carregar os backups.</div>'; return; }
+  if (document.getElementById('bkList') !== el) return; // the page changed meanwhile
+  el.innerHTML = list.length ? list.map(b => {
+    const t = new Date(b.created_at);
+    return `<div class="row"><div class="grow"><b>${t.toLocaleDateString('pt-BR')} · ${t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</b>
+      <div class="sub">${BACKUP_KIND[b.kind] || b.kind} · ${b.entries} lançamento${b.entries === 1 ? '' : 's'}</div></div>
+      <button class="btn small" data-act="restoreBackup" data-id="${b.id}" data-when="${t.toLocaleDateString('pt-BR')} às ${t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}">Restaurar</button></div>`;
+  }).join('') : '<div class="empty-state">Nenhum backup ainda. O primeiro automático sai hoje às 3h, ou faça um agora.</div>';
+}
+
 // Category editor: name, colour, and deleting (its entries can move to another category first).
 function openTagEditor(id) {
   const tg = state.tags.find(t => t.id === id); if (!tg) return;
@@ -1330,6 +1354,21 @@ document.addEventListener('click', e => {
     case 'addTag': {
       const n = document.getElementById('tagName').value.trim(); if (!n) return toast('Dê um nome à categoria');
       run(() => db.addTag({ name: n.slice(0, 60), color: document.getElementById('tagColor').value }), 'Categoria criada'); break;
+    }
+    case 'backupNow': {
+      const b = busy('Fazendo backup…');
+      db.backupNow().then(() => { b.done(); toast('Backup feito'); fillBackups(); }, err => { b.done(); toast('Não foi possível fazer o backup: ' + (err.message || 'erro de conexão')); });
+      break;
+    }
+    case 'restoreBackup': {
+      const id = a.dataset.id;
+      ask(`Restaurar o backup de ${a.dataset.when}?\n\nTudo volta a ser como estava nesse momento. O estado de agora fica guardado como "antes de restaurar", então dá para desfazer.`, { ok: 'Restaurar', danger: true }).then(yes => {
+        if (!yes) return;
+        const b = busy('Restaurando o backup…');
+        db.restoreBackup(id).then(r => { b.done(); toast(`Backup restaurado: ${r.entries} lançamentos`); applyTheme(); route(); fillBackups(); },
+          err => { b.done(); toast('Não foi possível restaurar: ' + (err.message || 'erro de conexão')); });
+      });
+      break;
     }
     case 'editTag': openTagEditor(a.dataset.id); break;
     case 'saveTag': {
