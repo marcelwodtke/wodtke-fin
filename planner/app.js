@@ -878,7 +878,7 @@ function renderTags() {
     <div class="panel"><h3>Nova categoria</h3>
       <div class="inline"><div class="field"><label>Nome</label><input id="tagName" placeholder="ex.: Pets"></div><div class="field" style="flex:0 0 70px"><label>Cor</label><input id="tagColor" type="color" value="#2563eb" style="padding:3px;height:40px"></div></div>
       <button class="btn primary" data-act="addTag">Adicionar categoria</button>
-      <p class="hint" style="margin-top:14px">Para remover uma categoria, vá em Ajustes.</p></div>
+      <p class="hint" style="margin-top:14px">Para mudar o nome, a cor ou excluir, toque na categoria na lista.</p></div>
   </div>`;
 }
 
@@ -899,8 +899,6 @@ function renderSettings() {
       <div class="rows">${state.cards.map(c => `<div class="row"><span class="sw" style="background:var(--card)"></span><div class="grow"><b>${esc(c.name)}</b><div class="sub">fecha dia ${c.close} · vence dia ${c.due}</div></div><button class="btn small danger" data-act="delCard" data-id="${c.id}">Remover</button></div>`).join('') || '<div class="empty-state">Nenhum cartão.</div>'}</div>
       <div class="inline" style="margin-top:12px"><div class="field"><label>Nome</label><input id="cName" placeholder="ex.: Cartão Black"></div><div class="field" style="flex:0 0 80px"><label>Fecha</label><input id="cClose" type="number" min="1" max="31" value="1"></div><div class="field" style="flex:0 0 80px"><label>Vence</label><input id="cDue" type="number" min="1" max="31" value="10"></div></div>
       <button class="btn" data-act="addCard">Adicionar cartão</button></div>
-    <div class="panel"><h3>Categorias</h3>
-      <div class="rows">${state.tags.map(tg => `<div class="row"><span class="sw" style="background:${tg.color}"></span><div class="grow">${esc(tg.name)}</div><button class="btn small" data-act="editTag" data-id="${tg.id}">Editar</button></div>`).join('')}</div></div>
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
