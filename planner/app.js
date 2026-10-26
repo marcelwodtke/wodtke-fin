@@ -31,6 +31,12 @@ const shortNum = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maxi
 const REPEATS = { none: 'Não repete', monthly: 'Todo mês', weekly: 'Toda semana', daily: 'Todo dia', installments: 'Parcelado' };
 // repeats that can run forever or a set number of times ("Até quando")
 const OPEN_REPEATS = ['monthly', 'weekly', 'daily'];
+// line icons in the app's style (stroke follows the text colour)
+const ICON = {
+  edit: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>',
+  trash: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  pen: '<svg class="ic ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/></svg>',
+};
 // the date of the n-th occurrence of a repeat that starts on `date`
 function nthDate(date, rep, n) {
   const d = parse(date);
@@ -1103,14 +1109,14 @@ function openDay(k) {
     if (x.ex.amount != null) parts.push(`valor ajustado (padrão ${money(baseAmount(x.e, x.od))})`);
     if (x.ex.date) parts.push(`movido de ${parse(x.od).toLocaleDateString('pt-BR')}`);
     if (x.ex.desc != null) parts.push('descrição ajustada');
-    return ` · <span style="color:var(--primary);font-weight:700">✎ ${parts.join(', ')}</span>`;
+    return ` · <span class="ex-note">${ICON.pen} ${parts.join(', ')}</span>`;
   };
   const items = r.items.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}${exNote(x)}</div></div>
-    <b class="num ${x.e.type === 'in' ? 'pos' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">✏️</button><button class="icon-btn" title="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">🗑</button></div>`).join('');
+    <b class="num ${x.e.type === 'in' ? 'pos' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" aria-label="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.edit}</button><button class="icon-btn icon-del" title="Excluir" aria-label="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.trash}</button></div>`).join('');
   const skipped = (r.skipped || []).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
-  openModal(`<div class="modal-head"><h2 style="text-transform:capitalize">${r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2><button class="icon-btn" data-act="close">✕</button></div>
+  openModal(`<div class="modal-head"><h2>${(t => t.charAt(0).toUpperCase() + t.slice(1))(r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2><button class="icon-btn" data-act="close">✕</button></div>
   <div class="modal-body"><div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
