@@ -198,6 +198,17 @@ const db = {
     await db.addEntry(next);
   },
   addTag: async t => { const r = await must(sb.from('wf_tags').insert({ name: t.name, color: t.color }).select().single()); state.tags.push(fromTag(r)); },
+  updateTag: async (id, t) => {
+    const r = await must(sb.from('wf_tags').update({ name: t.name, color: t.color }).eq('id', id).select().single());
+    state.tags = state.tags.map(x => (x.id === id ? fromTag(r) : x));
+  },
+  // every entry and remembered merchant of one category goes to another ('' = no category)
+  moveTag: async (from, to) => {
+    await must(sb.from('wf_entries').update({ tag_id: to || null }).eq('tag_id', from));
+    await must(sb.from('wf_merchant_rules').update({ tag_id: to || null }).eq('tag_id', from));
+    state.entries.forEach(x => { if (x.tagId === from) x.tagId = to; });
+    state.rules.forEach(x => { if (x.tagId === from) x.tagId = to; });
+  },
   delTag: async id => { await must(sb.from('wf_tags').delete().eq('id', id)); state.tags = state.tags.filter(t => t.id !== id); state.entries.forEach(x => { if (x.tagId === id) x.tagId = ''; }); },
   addCard: async c => { const r = await must(sb.from('wf_cards').insert({ name: c.name, close_day: c.close, due_day: c.due }).select().single()); state.cards.push(fromCard(r)); },
   delCard: async id => { await must(sb.from('wf_cards').delete().eq('id', id)); state.cards = state.cards.filter(c => c.id !== id); state.entries = state.entries.filter(x => x.cardId !== id); pruneExceptions(); },
@@ -751,7 +762,7 @@ function renderTags() {
   $view.innerHTML = `<div class="page-head"><div><h1>Categorias</h1><p>Gastos do mês por categoria (compras no cartão contam na data da compra).</p></div>${focusControl()}</div>
   <div class="grid two">
     <div class="panel"><h3>Total gasto: <span class="num">${money(total)}</span></h3>
-      <div class="rows">${list.map(t => `<div class="row"><span class="sw" style="background:${t.color}"></span><div class="grow"><b>${esc(t.name)}</b><div class="sub">${t.c} lançamento${t.c === 1 ? '' : 's'}${total ? ` · ${Math.round((t.v / total) * 100)}%` : ''}</div><div class="meter"><span style="width:${(t.v / max) * 100}%;background:${t.color}"></span></div></div><b class="num">${money(t.v)}</b></div>`).join('')}</div></div>
+      <div class="rows">${list.map(t => `<div class="row${t.id ? ' tag-row' : ''}" ${t.id ? `data-act="editTag" data-id="${t.id}" title="Editar categoria"` : ''}><span class="sw" style="background:${t.color}"></span><div class="grow"><b>${esc(t.name)}</b><div class="sub">${t.c} lançamento${t.c === 1 ? '' : 's'}${total ? ` · ${Math.round((t.v / total) * 100)}%` : ''}</div><div class="meter"><span style="width:${(t.v / max) * 100}%;background:${t.color}"></span></div></div><b class="num">${money(t.v)}</b></div>`).join('')}</div></div>
     <div class="panel"><h3>Nova categoria</h3>
       <div class="inline"><div class="field"><label>Nome</label><input id="tagName" placeholder="ex.: Pets"></div><div class="field" style="flex:0 0 70px"><label>Cor</label><input id="tagColor" type="color" value="#2563eb" style="padding:3px;height:40px"></div></div>
       <button class="btn primary" data-act="addTag">Adicionar categoria</button>
@@ -777,7 +788,7 @@ function renderSettings() {
       <div class="inline" style="margin-top:12px"><div class="field"><label>Nome</label><input id="cName" placeholder="ex.: Cartão Black"></div><div class="field" style="flex:0 0 80px"><label>Fecha</label><input id="cClose" type="number" min="1" max="31" value="1"></div><div class="field" style="flex:0 0 80px"><label>Vence</label><input id="cDue" type="number" min="1" max="31" value="10"></div></div>
       <button class="btn" data-act="addCard">Adicionar cartão</button></div>
     <div class="panel"><h3>Categorias</h3>
-      <div class="rows">${state.tags.map(tg => `<div class="row"><span class="sw" style="background:${tg.color}"></span><div class="grow">${esc(tg.name)}</div><button class="btn small danger" data-act="delTag" data-id="${tg.id}">Remover</button></div>`).join('')}</div></div>
+      <div class="rows">${state.tags.map(tg => `<div class="row"><span class="sw" style="background:${tg.color}"></span><div class="grow">${esc(tg.name)}</div><button class="btn small" data-act="editTag" data-id="${tg.id}">Editar</button></div>`).join('')}</div></div>
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
@@ -1016,6 +1027,25 @@ function inboxBanner() {
   return `<button class="inbox-banner" data-act="inbox"><span class="ib-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9m0 0-3.5-3.5M12 12l3.5-3.5"/><path d="M3 13.5h4.5l1.5 2.5h6l1.5-2.5H21"/><path d="M5 9.5 3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5l-2-4"/></svg></span><span class="ib-txt"><b>${n} compra${n === 1 ? '' : 's'} importada${n === 1 ? '' : 's'}</b><small>Apple Pay · ${money(total)}</small></span><span class="ib-go">Revisar <span aria-hidden="true">›</span></span></button>`;
 }
 
+// Category editor: name, colour, and deleting (its entries can move to another category first).
+function openTagEditor(id) {
+  const tg = state.tags.find(t => t.id === id); if (!tg) return;
+  const used = state.entries.filter(x => x.tagId === id).length;
+  const others = state.tags.filter(t => t.id !== id);
+  openModal(`<div class="modal-head"><h2>Editar categoria</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body">
+    <div class="inline"><div class="field"><label>Nome</label><input id="etName" value="${esc(tg.name)}" maxlength="60"></div>
+      <div class="field" style="flex:0 0 70px"><label>Cor</label><input id="etColor" type="color" value="${esc(tg.color)}" style="padding:3px;height:42px"></div></div>
+    <div class="tag-del"><h3>Excluir categoria</h3>
+      ${used ? `<p class="hint">${used} lançamento${used === 1 ? ' usa' : 's usam'} esta categoria. Antes de excluir, escolha para onde ${used === 1 ? 'ele vai' : 'eles vão'}:</p>
+      <div class="field"><label>Mover lançamentos para</label><select id="etMove"><option value="">Sem categoria</option>${others.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>`
+      : '<p class="hint">Nenhum lançamento usa esta categoria.</p>'}
+      <button class="btn danger" data-act="delTag" data-id="${id}">Excluir categoria</button></div>
+  </div>
+  <div class="modal-foot"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveTag" data-id="${id}">Salvar</button></div>`);
+  document.getElementById('etName').focus();
+}
+
 // Review imported purchases: file each one as an entry (pre-filled) or discard it.
 function openInbox() {
   const items = state.inbox || [];
@@ -1192,7 +1222,24 @@ document.addEventListener('click', e => {
       const n = document.getElementById('tagName').value.trim(); if (!n) return toast('Dê um nome à categoria');
       run(() => db.addTag({ name: n.slice(0, 60), color: document.getElementById('tagColor').value }), 'Categoria criada'); break;
     }
-    case 'delTag': run(() => db.delTag(a.dataset.id), 'Categoria removida'); break;
+    case 'editTag': openTagEditor(a.dataset.id); break;
+    case 'saveTag': {
+      const n = document.getElementById('etName').value.trim(); if (!n) return toast('Dê um nome à categoria');
+      const id = a.dataset.id; closeModal();
+      run(() => db.updateTag(id, { name: n.slice(0, 60), color: document.getElementById('etColor').value }), 'Categoria salva'); break;
+    }
+    case 'delTag': {
+      const id = a.dataset.id, tg = state.tags.find(t => t.id === id); if (!tg) break;
+      const used = state.entries.filter(x => x.tagId === id).length;
+      const to = used ? document.getElementById('etMove').value : '';
+      const toName = to ? (state.tags.find(t => t.id === to) || {}).name : '';
+      ask(`Excluir a categoria "${tg.name}"?${used ? `\n\n${used} lançamento${used === 1 ? '' : 's'} ${to ? `vão para "${toName}"` : `ficam sem categoria`}.` : ''}`, { ok: 'Excluir', danger: true }).then(yes => {
+        if (!yes) return;
+        closeModal();
+        run(async () => { if (used && to) await db.moveTag(id, to); await db.delTag(id); }, 'Categoria excluída');
+      });
+      break;
+    }
     case 'addCard': {
       const n = document.getElementById('cName').value.trim(), c = +document.getElementById('cClose').value, d = +document.getElementById('cDue').value;
       if (!n || !(c >= 1 && c <= 31) || !(d >= 1 && d <= 31)) return toast('Preencha nome, fechamento e vencimento (1–31)');
