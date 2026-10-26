@@ -487,6 +487,16 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 .ask-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .ask-actions .btn { padding: 10px 16px; }
 .btn.danger-solid { background: var(--neg); border-color: var(--neg); color: #fff; }
+
+/* "working on it" overlay (busy) */
+.busy-overlay { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .45); }
+.busy-card { min-width: 240px; max-width: 320px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 18px; padding: 22px 22px 18px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.busy-card p { margin: 12px 0 0; font-weight: 800; font-size: 14.5px; }
+.busy-spin { display: inline-block; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--primary); animation: busy-spin .8s linear infinite; }
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+.busy-bar { margin-top: 12px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.busy-bar[hidden] { display: none; }
+.busy-bar span { display: block; height: 100%; width: 0; background: var(--primary); transition: width .2s ease; }
 </style>
 </head>
 <body class="locked">

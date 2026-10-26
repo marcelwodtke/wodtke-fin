@@ -397,31 +397,54 @@ function installmentStart(r, card) {
 }
 
 async function applyInvoice() {
+  if (imp.applying) return; // a second tap while saving would enter everything twice
   const card = state.cards.find(c => c.id === imp.cardId);
   if (!card) return;
   const add = imp.rows.filter(r => r.action === 'add'), adjust = imp.rows.filter(r => r.action === 'adjust' && r.match), skip = imp.extra.filter(e => e.skip);
   if (!add.length && !adjust.length && !skip.length) return toast('Nada marcado para aplicar');
   if (!(await ask(`Aplicar na fatura do ${card.name}?\n\n${add.length} lançar · ${adjust.length} ajustar valor · ${skip.length} pular`, { ok: 'Aplicar' }))) return;
-  await run(async () => {
-    for (const r of add) {
-      // an older purchase with no installment info is entered once, on this invoice, keeping its date in the text
-      const bought = parse(r.date).toLocaleDateString('pt-BR');
-      const e = r.cnt
-        ? { desc: `${r.desc} (parcelas ${r.i} a ${r.cnt} de ${r.cnt}, compra ${bought})`, date: installmentStart(r, card), amount: Math.round(r.amount * (r.cnt - r.i + 1) * 100) / 100,
-            repeat: r.cnt > r.i ? 'installments' : 'none', count: r.cnt - r.i + 1 }
-        : r.old ? { desc: `${r.desc} (compra ${bought})`, date: cycleDate(card), amount: r.amount, repeat: 'none', count: 1 }
-        : { desc: r.desc, date: r.date, amount: r.amount, repeat: 'none', count: 1 };
-      Object.assign(e, { type: 'card', cardId: card.id, tagId: r.tagId || '' });
-      await db.addEntry(e);
-      if (r.tagId) await db.rememberMerchant(r.desc, e); // next time this merchant gets the same category
-    }
-    for (const r of adjust) {
-      const x = r.match;
-      await db.setException({ entryId: x.e.id, od: x.od, action: 'modify', amount: r.amount, date: x.ex && x.ex.date ? x.ex.date : '', desc: x.ex ? x.ex.desc : null });
-    }
-    for (const s of skip) await db.setException({ entryId: s.x.e.id, od: s.x.od, action: 'skip' });
-  }, 'Fatura aplicada');
-  reconcile(); route();
+  const entries = add.map(r => {
+    // an older purchase with no installment info is entered once, on this invoice, keeping its date in the text
+    const bought = parse(r.date).toLocaleDateString('pt-BR');
+    const e = r.cnt
+      ? { desc: `${r.desc} (parcelas ${r.i} a ${r.cnt} de ${r.cnt}, compra ${bought})`, date: installmentStart(r, card), amount: Math.round(r.amount * (r.cnt - r.i + 1) * 100) / 100,
+          repeat: r.cnt > r.i ? 'installments' : 'none', count: r.cnt - r.i + 1 }
+      : r.old ? { desc: `${r.desc} (compra ${bought})`, date: cycleDate(card), amount: r.amount, repeat: 'none', count: 1 }
+      : { desc: r.desc, date: r.date, amount: r.amount, repeat: 'none', count: 1 };
+    return Object.assign(e, { type: 'card', cardId: card.id, tagId: r.tagId || '' });
+  });
+  const total = entries.length + adjust.length + skip.length;
+  let doneCount = 0;
+  const b = busy('Aplicando a fatura…');
+  const step = (label, n = 1) => { doneCount += n; b.say(`${label} ${Math.min(doneCount, total)} de ${total}…`, doneCount / total); };
+  imp.applying = true;
+  let saved = false;
+  try {
+    await run(async () => {
+      for (let k = 0; k < entries.length; k += 40) { // a few requests instead of one per purchase
+        const chunk = entries.slice(k, k + 40);
+        b.say(`Lançando ${Math.min(doneCount + chunk.length, total)} de ${total}…`, doneCount / total);
+        await db.addEntries(chunk);
+        step('Lançado', chunk.length);
+      }
+      // next time these merchants get the same category
+      await db.rememberMerchants(add.map((r, k) => [r.desc, entries[k]]).filter(([, e]) => e.tagId));
+      for (const r of adjust) {
+        const x = r.match;
+        await db.setException({ entryId: x.e.id, od: x.od, action: 'modify', amount: r.amount, date: x.ex && x.ex.date ? x.ex.date : '', desc: x.ex ? x.ex.desc : null });
+        step('Ajustando');
+      }
+      for (const sk of skip) { await db.setException({ entryId: sk.x.e.id, od: sk.x.od, action: 'skip' }); step('Pulando'); }
+      saved = true;
+    }, `Fatura aplicada: ${entries.length} lançadas`);
+  } finally { imp.applying = false; b.done(); }
+  // done: clear the screen for the next import; after an error keep everything so it can be retried
+  if (saved) clearImport(); else reconcile();
+  route();
+}
+// back to an empty import (the card and month stay picked)
+function clearImport() {
+  imp = { ...imp, rows: [], extra: [], fileName: '', lines: null, needPassword: false, data: null, total: null, showText: false, csv: null, password: undefined, cardTouched: false };
 }
 
 // form events on the Importar page
@@ -431,8 +454,8 @@ document.addEventListener('change', async e => {
   if (t.id === 'invFile' && t.files && t.files[0]) {
     const f = t.files[0];
     imp.fileName = f.name; imp.data = new Uint8Array(await f.arrayBuffer()); imp.rows = []; imp.extra = []; imp.showText = false; imp.csv = null; imp.needPassword = false;
-    toast('Lendo a fatura…');
-    if (/\.csv$/i.test(f.name) || /csv/.test(f.type)) readCsv(); else readInvoice();
+    const b = busy('Lendo a fatura…');
+    try { if (/\.csv$/i.test(f.name) || /csv/.test(f.type)) readCsv(); else await readInvoice(); } finally { b.done(); }
   } else if (t.dataset.map) {
     imp.csv.map[t.dataset.map] = +t.value; imp.csv.keep = true; readCsv();
   } else if (t.id === 'invCard' || t.id === 'invMonth') {
@@ -465,8 +488,7 @@ document.addEventListener('click', e => {
     case 'invCancel':
       (imp.rows.length ? ask('Cancelar esta importação?\n\nNada foi lançado ainda.', { ok: 'Cancelar importação', cancel: 'Continuar' }) : Promise.resolve(true)).then(yes => {
         if (!yes) return;
-        imp = { ...imp, rows: [], extra: [], fileName: '', lines: null, needPassword: false, data: null, total: null, showText: false, csv: null, password: undefined, cardTouched: false };
-        route();
+        clearImport(); route();
       });
       break;
     case 'invAddRow': imp.rows.push({ desc: '', amount: 0, date: iso(today()), i: null, cnt: null, credit: false, action: 'add', touched: true, status: 'new', tagId: '' }); route(); break;

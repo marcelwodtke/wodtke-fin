@@ -135,6 +135,20 @@ function importDefaults(item) {
 
 const db = {
   settings: patch => must(sb.from('wf_settings').update(patch).eq('user_id', user.id)),
+  // many entries in one request (invoice imports); returns them in the same order
+  addEntries: async list => {
+    if (!list.length) return [];
+    const rows = await must(sb.from('wf_entries').insert(list.map(toEntry)).select());
+    const ens = rows.map(fromEntry); state.entries.push(...ens); return ens;
+  },
+  // remember several merchants' categories at once (one row per merchant, the last one wins)
+  rememberMerchants: async pairs => {
+    const byKey = new Map();
+    for (const [merchant, e] of pairs) { const key = merchantKey(merchant); if (key && e.type !== 'in') byKey.set(key, { merchant_key: key, type: e.type, tag_id: e.tagId || null, card_id: e.type === 'card' ? e.cardId || null : null, updated_at: new Date().toISOString() }); }
+    if (!byKey.size) return;
+    await must(sb.from('wf_merchant_rules').upsert([...byKey.values()], { onConflict: 'user_id,merchant_key' }));
+    state.rules = state.rules.filter(r => !byKey.has(r.key)).concat([...byKey.values()].map(fromRule));
+  },
   addEntry: async e => { const r = await must(sb.from('wf_entries').insert(toEntry(e)).select().single()); const en = fromEntry(r); state.entries.push(en); return en; },
   // imported purchases
   finishInbox: async (id, status, entryId = null) => {
@@ -1061,6 +1075,19 @@ function openOccurrence(e, od) {
 
 // ---------- events ----------
 const toastEl = document.getElementById('toast');
+// Full-screen "working on it" overlay for slow tasks; busy(text) shows it, .say(text) updates it, .done() hides it.
+function busy(text) {
+  const el = document.createElement('div');
+  el.className = 'busy-overlay'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+  el.innerHTML = `<div class="busy-card"><span class="busy-spin" aria-hidden="true"></span><p></p><div class="busy-bar"><span></span></div></div>`;
+  const p = el.querySelector('p'), bar = el.querySelector('.busy-bar'), fill = bar.querySelector('span');
+  const api = {
+    say(t, part) { p.textContent = t; bar.hidden = part == null; if (part != null) fill.style.width = `${Math.round(Math.min(1, part) * 100)}%`; return api; },
+    done() { el.remove(); },
+  };
+  document.body.appendChild(el);
+  return api.say(text);
+}
 // App-styled replacement for confirm(): resolves true on the main button, false on Voltar, Escape or a tap outside.
 // opts.ok names the main button; opts.danger paints it red for destructive actions.
 function ask(message, opts = {}) {
