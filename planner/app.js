@@ -29,6 +29,14 @@ const TYPES = {
 const FLOW_KEYS = ['in', 'out', 'daily', 'save', 'card'];
 const shortNum = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const REPEATS = { none: 'Não repete', monthly: 'Todo mês', weekly: 'Toda semana', daily: 'Todo dia', installments: 'Parcelado' };
+// repeats that can run forever or a set number of times ("Até quando")
+const OPEN_REPEATS = ['monthly', 'weekly', 'daily'];
+// the date of the n-th occurrence of a repeat that starts on `date`
+function nthDate(date, rep, n) {
+  const d = parse(date);
+  if (rep === 'monthly') return iso(monthDate(d.getFullYear(), d.getMonth() + n - 1, d.getDate()));
+  return iso(addDays(d, (n - 1) * (rep === 'weekly' ? 7 : 1)));
+}
 
 // ---------- state ----------
 const KEY = 'wodtke-financas-v1';
@@ -81,7 +89,8 @@ const emptyState = () => ({ startBalance: 0, startDate: iso(monthDate(today().ge
 const fromEntry = r => ({ id: r.id, type: r.type, amount: +r.amount, desc: r.description || '', date: r.date, endDate: r.end_date || '', repeat: r.repeat, count: r.installments || 1, tagId: r.tag_id || '', cardId: r.card_id || '' });
 // od = the date the occurrence originally fell on; amount/date/desc are optional overrides
 const fromException = r => ({ id: r.id, entryId: r.entry_id, od: r.occurrence_date, action: r.action, amount: r.amount == null ? null : +r.amount, date: r.date || '', desc: r.description });
-const toEntry = e => ({ type: e.type, amount: e.amount, description: e.desc || '', date: e.date, repeat: e.repeat, installments: e.repeat === 'installments' ? e.count : 1, tag_id: e.tagId || null, card_id: e.type === 'card' ? e.cardId : null });
+const toEntry = e => ({ type: e.type, amount: e.amount, description: e.desc || '', date: e.date, repeat: e.repeat, installments: e.repeat === 'installments' ? e.count : 1, tag_id: e.tagId || null, card_id: e.type === 'card' ? e.cardId : null,
+  ...('endDate' in e ? { end_date: e.endDate || null } : {}) }); // the end date is written only when the form decides it
 const fromTag = r => ({ id: r.id, name: r.name, color: r.color });
 const fromCard = r => ({ id: r.id, name: r.name, close: r.close_day, due: r.due_day });
 
@@ -1007,6 +1016,10 @@ function openEntry(date, existing, opts = {}) {
       <div class="inline"><div class="field"><label>${isCard ? 'Data da compra' : 'Data'}</label><input id="fDate" type="date" value="${draw.date ?? date ?? iso(today())}"></div>
         <div class="field"><label>Repetição</label><select id="fRep">${Object.entries(REPEATS).map(([k, l]) => `<option value="${k}" ${k === (draw.rep ?? 'none') ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <div class="field" id="fCountWrap" style="display:${(draw.rep ?? 'none') === 'installments' ? 'flex' : 'none'}"><label>Número de parcelas (o valor é dividido)</label><input id="fCount" type="number" min="2" max="120" value="${draw.count ?? 3}"></div>
+      <div id="fUntilWrap" style="display:${OPEN_REPEATS.includes(draw.rep) ? 'block' : 'none'}">
+        <div class="inline"><div class="field"><label>Até quando</label><select id="fUntil"><option value="forever" ${draw.until !== 'times' ? 'selected' : ''}>Sem fim</option><option value="times" ${draw.until === 'times' ? 'selected' : ''}>Número de vezes</option></select></div>
+          <div class="field" id="fTimesWrap" style="display:${draw.until === 'times' ? 'flex' : 'none'}"><label>Vezes</label><div class="stepper"><button type="button" class="btn" data-step="-1" aria-label="Menos uma vez">−</button><input id="fTimes" type="text" inputmode="numeric" value="${draw.times ?? 12}"><button type="button" class="btn" data-step="1" aria-label="Mais uma vez">+</button></div></div></div>
+        <p class="hint" id="fUntilHint" style="margin:-4px 0 10px"></p></div>
       <div class="inline">${isCard ? `<div class="field"><label>Cartão</label><select id="fCard">${state.cards.map(c => `<option value="${c.id}" ${c.id === draw.card ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>` : ''}
         <div class="field"><label>Categoria</label><select id="fTag"><option value="">Sem categoria</option>${state.tags.map(t => `<option value="${t.id}" ${t.id === draw.tag ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
       ${isCard && !state.cards.length ? '<p class="hint neg">Cadastre um cartão em Ajustes primeiro.</p>' : ''}
@@ -1014,12 +1027,28 @@ function openEntry(date, existing, opts = {}) {
         : series ? `<p class="hint" style="margin:4px 0 0">↻ Este lançamento se repete (${REPEATS[existing.repeat].toLowerCase()}). A alteração vale para <b>todas as ocorrências</b>, inclusive as passadas.</p>` : ''}
     </div>
     <div class="modal-foot">${existing && !from ? `<button class="btn danger" data-act="delEntry" data-id="${existing.id}" style="margin-right:auto">Excluir${series ? ' série' : ''}</button>` : ''}<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveEntry">${existing ? 'Salvar alterações' : `Salvar ${TYPES[type].label.toLowerCase()}`}</button></div>`);
-    modal.querySelector('#fRep').addEventListener('change', e => { modal.querySelector('#fCountWrap').style.display = e.target.value === 'installments' ? 'flex' : 'none'; });
+    // show the fields that fit the repeat, and say how the "Até quando" choice plays out
+    const sync = () => {
+      const rep = modal.querySelector('#fRep').value, until = modal.querySelector('#fUntil').value;
+      const times = Math.max(1, Math.min(600, parseInt(modal.querySelector('#fTimes').value, 10) || 1));
+      modal.querySelector('#fCountWrap').style.display = rep === 'installments' ? 'flex' : 'none';
+      modal.querySelector('#fUntilWrap').style.display = OPEN_REPEATS.includes(rep) ? 'block' : 'none';
+      modal.querySelector('#fTimesWrap').style.display = until === 'times' ? 'flex' : 'none';
+      const amt = Math.abs(unmaskMoney(modal.querySelector('#fAmt').value)), d = modal.querySelector('#fDate').value;
+      modal.querySelector('#fUntilHint').textContent = until !== 'times' ? 'Repete sem data para acabar.'
+        : `${times} vez${times === 1 ? '' : 'es'} de ${money(amt)}${amt ? ` (total ${money(amt * times)})` : ''}${d ? ` · a última em ${parse(nthDate(d, rep, times)).toLocaleDateString('pt-BR')}` : ''}`;
+    };
+    modal.querySelectorAll('#fRep, #fUntil, #fTimes, #fAmt, #fDate').forEach(el => { el.addEventListener('change', sync); el.addEventListener('input', sync); });
+    modal.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+      const t = modal.querySelector('#fTimes'); t.value = Math.max(1, Math.min(600, (parseInt(t.value, 10) || 1) + +b.dataset.step)); sync();
+    }));
+    sync();
     setTimeout(() => modal.querySelector('#fAmt').focus(), 30);
   };
   const keep = () => {
     draw.amt = modal.querySelector('#fAmt').value; draw.desc = modal.querySelector('#fDesc').value; draw.date = modal.querySelector('#fDate').value;
     draw.rep = modal.querySelector('#fRep').value; draw.count = modal.querySelector('#fCount').value;
+    draw.until = modal.querySelector('#fUntil').value; draw.times = modal.querySelector('#fTimes').value;
     draw.tag = modal.querySelector('#fTag').value; draw.card = modal.querySelector('#fCard')?.value ?? draw.card;
   };
   // installments store the total, so the form shows the total amount back when editing;
@@ -1030,6 +1059,11 @@ function openEntry(date, existing, opts = {}) {
     prefill = { ...prefill, amt: Math.round(per * left * 100) / 100, count: left, rep: left > 1 ? 'installments' : 'none' };
   }
   if (from) prefill.date = from;
+  // a monthly/weekly/daily series with an end date shows as "Número de vezes", counting what is left from its first date shown
+  if (existing && OPEN_REPEATS.includes(existing.repeat)) {
+    prefill.until = existing.endDate ? 'times' : 'forever';
+    prefill.times = existing.endDate ? occurrences(existing, parse(existing.endDate)).filter(o => iso(o.d) >= prefill.date).length || 1 : 12;
+  }
   if (!existing && opts.prefill) {
     const p = opts.prefill;
     prefill = { amt: p.amount, desc: p.desc, date: p.date, rep: 'none', count: 3, tag: p.tagId || '', card: p.cardId || undefined };
@@ -1042,6 +1076,12 @@ function openEntry(date, existing, opts = {}) {
     if (!d) return toast('Informe a data');
     const rep = modal.querySelector('#fRep').value;
     const entry = { id: uid(), type, amount, desc: modal.querySelector('#fDesc').value.trim(), date: d, repeat: rep, count: rep === 'installments' ? Math.max(2, parseInt(modal.querySelector('#fCount').value) || 2) : 1, tagId: modal.querySelector('#fTag').value, cardId: type === 'card' ? (modal.querySelector('#fCard')?.value || '') : '' };
+    // "Número de vezes" ends the series on its last occurrence; "Sem fim" clears any end.
+    // Other repeats keep the end date they had (a series split earlier still stops where it stopped).
+    if (OPEN_REPEATS.includes(rep)) {
+      const times = Math.max(1, Math.min(600, parseInt(modal.querySelector('#fTimes').value, 10) || 1));
+      entry.endDate = modal.querySelector('#fUntil').value === 'times' ? nthDate(d, rep, times) : '';
+    } else if (rep === 'none') entry.endDate = '';
     if (type === 'card' && !entry.cardId) return toast('Cadastre um cartão primeiro');
     if (entry.desc.length > 200) return toast('Descrição muito longa (máx. 200)');
     const btn = modal.querySelector('[data-act=saveEntry]'); btn.disabled = true;
