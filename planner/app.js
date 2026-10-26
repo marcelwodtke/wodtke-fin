@@ -901,7 +901,6 @@ function renderSettings() {
       <button class="btn" data-act="addCard">Adicionar cartão</button></div>
     <div class="panel"><h3>Aparência</h3>
       <div class="seg" style="grid-template-columns:repeat(3,1fr)">${[['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></div>
-    <div class="panel"><h3>Instalar no celular</h3>${installHelp()}</div>
     <div class="panel" style="grid-column:1/-1"><h3>Backups</h3>
       <p class="hint">Uma cópia de tudo (lançamentos, categorias, cartões e ajustes) é guardada automaticamente todo dia às 3h, e fica disponível por 60 dias. Você pode voltar para qualquer uma delas.</p>
       <button class="btn" data-act="backupNow">Fazer backup agora</button>
@@ -1416,28 +1415,7 @@ function closeUserMenu() {
 document.addEventListener('pointerdown', e => { if (!e.target.closest('.user-menu')) closeUserMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUserMenu(); });
 
-// ---------- install as an app (PWA) ----------
-let installPrompt = null;
-const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-function installHelp() {
-  if (isStandalone()) return '<p class="hint" style="margin:0">✓ O app já está instalado e aberto como aplicativo.</p>';
-  if (installPrompt) return '<p class="hint">Adicione o wmoney à tela inicial e abra como um app, mesmo sem internet.</p><button class="btn primary" data-act="install">⤓ Instalar app</button>';
-  if (isIOS()) return '<p class="hint" style="margin:0">No iPhone/iPad, abra no <b>Safari</b>, toque em <b>Compartilhar</b> (□↑) e depois em <b>Adicionar à Tela de Início</b>.</p>';
-  if (!window.isSecureContext) return '<p class="hint" style="margin:0">A instalação só aparece quando o app é aberto por um endereço <b>https://</b>. Publique o app num servidor com HTTPS e abra pelo celular.</p>';
-  return '<p class="hint" style="margin:0">No Android, abra no <b>Chrome</b> e use o menu <b>⋮ → Instalar app</b> (ou "Adicionar à tela inicial").</p>';
-}
-function refreshInstallUI() {
-  if ((location.hash || '').slice(1) === 'ajustes') renderSettings();
-}
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; refreshInstallUI(); });
-window.addEventListener('appinstalled', () => { installPrompt = null; refreshInstallUI(); toast('App instalado'); });
-document.addEventListener('click', async e => {
-  if (!e.target.closest('[data-act="install"]') || !installPrompt) return;
-  installPrompt.prompt();
-  await installPrompt.userChoice;
-  installPrompt = null; refreshInstallUI();
-});
+// ---------- offline support (PWA) ----------
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.addEventListener('hashchange', () => { if (user) route(); });
 
