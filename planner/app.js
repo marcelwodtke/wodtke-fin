@@ -908,12 +908,13 @@ function renderSettings() {
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="sample">Restaurar exemplo</button><button class="btn danger" data-act="wipe">Apagar todos os lançamentos</button></div></div>
   </div>`;
   // money fields format themselves as you type; values are saved only with "Atualizar"
-  $view.querySelectorAll('.money-input').forEach(el => el.addEventListener('input', () => applyMoneyMask(el)));
 }
 
 // "1.234,56" as you type: digits fill in from the right, like a card machine; a leading "-" marks negatives
 const maskMoney = v => (v <= -0.005 ? '-' : '') + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const unmaskMoney = s => { const digits = String(s).replace(/\D/g, ''); const v = (parseInt(digits || '0', 10) || 0) / 100; return String(s).trim().startsWith('-') ? -v : v; };
+// every money field formats as you type (digits fill from the cents: 4 → 0,04 · 4000 → 40,00 · 400000 → 4.000,00)
+document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('money-input')) applyMoneyMask(e.target); });
 function applyMoneyMask(el) {
   const neg = el.value.trim().startsWith('-'), digits = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 13);
   el.value = digits ? (neg ? '-' : '') + maskMoney(parseInt(digits, 10) / 100) : (neg ? '-' : '');
@@ -979,7 +980,7 @@ function route() {
 const overlay = document.getElementById('overlay'), modal = document.getElementById('modal');
 function openModal(html) { modal.innerHTML = html; overlay.classList.add('open'); }
 function closeModal() { overlay.classList.remove('open'); }
-overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+// forms close only through their own buttons (✕, Cancelar…): a click beside them must not throw away what was typed
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // Opens the entry form; pass `existing` to edit an entry (and its whole series) instead of creating one,
@@ -995,7 +996,7 @@ function openEntry(date, existing, opts = {}) {
     openModal(`<div class="modal-head"><h2>${from ? `Alterar a partir de ${fromLabel}` : existing ? 'Editar lançamento' : 'Novo lançamento'}</h2><button class="icon-btn" data-act="close">✕</button></div>
     <div class="modal-body">
       <div class="seg">${Object.entries(TYPES).map(([k, t]) => `<button class="${k === type ? 'on' : ''}" data-act="type" data-v="${k}"><span class="sw" style="background:${t.color}"></span>${t.label}</button>`).join('')}</div>
-      <div class="field"><label>Valor (R$)</label><input id="fAmt" class="amount-input" type="number" step="0.01" min="0" placeholder="0,00" value="${draw.amt ?? ''}"></div>
+      <div class="field"><label>Valor (R$)</label><input id="fAmt" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" value="${draw.amt == null || draw.amt === '' ? '' : typeof draw.amt === 'number' ? maskMoney(draw.amt) : draw.amt}"></div>
       <div class="field"><label>Descrição</label><input id="fDesc" placeholder="${TYPES[type].hint}" value="${esc(draw.desc ?? '')}"></div>
       <div class="inline"><div class="field"><label>${isCard ? 'Data da compra' : 'Data'}</label><input id="fDate" type="date" value="${draw.date ?? date ?? iso(today())}"></div>
         <div class="field"><label>Repetição</label><select id="fRep">${Object.entries(REPEATS).map(([k, l]) => `<option value="${k}" ${k === (draw.rep ?? 'none') ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
@@ -1030,7 +1031,7 @@ function openEntry(date, existing, opts = {}) {
   Object.assign(draw, prefill || { amt: undefined, desc: undefined, date: undefined, rep: undefined, count: undefined, tag: '', card: undefined });
   openEntry.setType = v => { keep(); type = v; draw(); };
   openEntry.submit = () => {
-    const amount = parseFloat(modal.querySelector('#fAmt').value), d = modal.querySelector('#fDate').value;
+    const amount = Math.abs(unmaskMoney(modal.querySelector('#fAmt').value)), d = modal.querySelector('#fDate').value;
     if (!(amount > 0)) return toast('Informe um valor maior que zero');
     if (!d) return toast('Informe a data');
     const rep = modal.querySelector('#fRep').value;
@@ -1190,7 +1191,7 @@ function openOccurrence(e, od) {
   openModal(`<div class="modal-head"><h2>Só esta ocorrência</h2><button class="icon-btn" data-act="close">✕</button></div>
   <div class="modal-body">
     <p class="hint" style="margin:0 0 12px"><b>${esc(e.desc || TYPES[e.type].label)}</b> de ${parse(od).toLocaleDateString('pt-BR')}${e.repeat === 'installments' ? ` · parcela ${idx}/${e.count}` : ''}. O resto da série não muda.</p>
-    <div class="field"><label>Valor desta vez (R$) · padrão ${money(base)}</label><input id="oAmt" class="amount-input" type="number" step="0.01" min="0" value="${x && x.amount != null ? x.amount : Math.round(base * 100) / 100}"></div>
+    <div class="field"><label>Valor desta vez (R$) · padrão ${money(base)}</label><input id="oAmt" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" value="${maskMoney(x && x.amount != null ? x.amount : Math.round(base * 100) / 100)}"></div>
     <div class="field"><label>${e.type === 'card' ? 'Data da compra' : 'Data'} desta vez</label><input id="oDate" type="date" value="${(x && x.date) || od}"></div>
     <div class="field"><label>Descrição desta vez</label><input id="oDesc" value="${esc(x && x.desc != null ? x.desc : e.desc)}"></div>
   </div>
@@ -1198,7 +1199,7 @@ function openOccurrence(e, od) {
   modal.querySelector('#oSkip').addEventListener('click', () => { closeModal(); run(() => db.setException({ entryId: e.id, od, action: 'skip' }), 'Ocorrência pulada'); });
   modal.querySelector('#oReset')?.addEventListener('click', () => { closeModal(); run(() => db.clearException(e.id, od), 'Ocorrência voltou ao padrão'); });
   modal.querySelector('#oSave').addEventListener('click', () => {
-    const amount = parseFloat(modal.querySelector('#oAmt').value), date = modal.querySelector('#oDate').value, desc = modal.querySelector('#oDesc').value.trim();
+    const amount = Math.abs(unmaskMoney(modal.querySelector('#oAmt').value)), date = modal.querySelector('#oDate').value, desc = modal.querySelector('#oDesc').value.trim();
     if (!(amount > 0)) return toast('Informe um valor maior que zero');
     if (!date) return toast('Informe a data');
     if (desc.length > 200) return toast('Descrição muito longa (máx. 200)');
