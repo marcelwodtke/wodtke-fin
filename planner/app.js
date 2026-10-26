@@ -460,7 +460,8 @@ function openPickMenu(sel) {
     const o = e.target.closest('.tm-opt'); if (!o || o.disabled) return;
     closePickMenu();
     if (sel.value !== o.dataset.v) { sel.value = o.dataset.v; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
-    sel.focus({ preventScroll: true });
+    // back to the field for keyboard users; never on touch screens, where focusing a select opens iOS's own picker
+    if (!matchMedia('(pointer: coarse)').matches) sel.focus({ preventScroll: true });
   });
   pickFor = sel; sel.setAttribute('aria-expanded', 'true');
   (menu.querySelector('.on') || menu.querySelector('.tm-opt:not([disabled])'))?.focus({ preventScroll: true });
