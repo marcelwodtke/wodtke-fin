@@ -996,7 +996,8 @@ function inboxBanner() {
   const n = (state.inbox || []).length;
   if (!n) return '';
   const total = state.inbox.reduce((a, x) => a + x.amount, 0);
-  return `<button class="inbox-banner" data-act="inbox"><span class="ib-ico">📥</span><span class="ib-txt"><b>${n} compra${n === 1 ? '' : 's'} importada${n === 1 ? '' : 's'}</b><small>Apple Pay · ${money(total)} · toque para revisar</small></span><span class="ib-go">›</span></button>`;
+  // tray icon, the summary, and a "Revisar" pill; black on light pages, white on dark
+  return `<button class="inbox-banner" data-act="inbox"><span class="ib-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9m0 0-3.5-3.5M12 12l3.5-3.5"/><path d="M3 13.5h4.5l1.5 2.5h6l1.5-2.5H21"/><path d="M5 9.5 3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5l-2-4"/></svg></span><span class="ib-txt"><b>${n} compra${n === 1 ? '' : 's'} importada${n === 1 ? '' : 's'}</b><small>Apple Pay · ${money(total)}</small></span><span class="ib-go">Revisar <span aria-hidden="true">›</span></span></button>`;
 }
 
 // Review imported purchases: file each one as an entry (pre-filled) or discard it.
