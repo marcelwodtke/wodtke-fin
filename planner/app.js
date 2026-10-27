@@ -546,12 +546,19 @@ document.addEventListener('touchend', e => { if (pickable(e.target)) { e.prevent
 // a tap that lands on a select's box opens the app menu instead.
 document.addEventListener('click', e => {
   if (!matchMedia('(pointer: coarse)').matches || e.target.closest('#pickMenu')) return;
-  const hit = [...document.querySelectorAll('select, input[type="date"], input[type="month"]')].find(s => {
-    if (!pickable(s) || !s.offsetParent) return false;
-    const r = s.getBoundingClientRect();
-    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  });
-  if (hit) { e.preventDefault(); e.stopPropagation(); openPicker(hit); }
+  // The tap lands on the field around the select (selects let taps through). Pick the select of that
+  // field, not by screen position: with the iPhone keyboard open the tap's coordinates come out shifted.
+  const SEL = 'select, input[type="date"], input[type="month"]';
+  const scope = e.target.closest('.field, .inv-row, .inv-map label');
+  if (!scope) return;
+  const cands = [...scope.querySelectorAll(SEL)].filter(s => pickable(s) && s.offsetParent);
+  if (!cands.length) return;
+  const dist = s => { const r = s.getBoundingClientRect(); return Math.hypot(Math.max(r.left - e.clientX, 0, e.clientX - r.right), Math.max(r.top - e.clientY, 0, e.clientY - r.bottom)); };
+  const hit = cands.length === 1 ? cands[0] : cands.sort((x, y) => dist(x) - dist(y))[0];
+  if (cands.length > 1 && dist(hit) > 24) return; // between two pickers in a row: not a tap on either
+  e.preventDefault(); e.stopPropagation();
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); // drop the keyboard first
+  openPicker(hit);
 }, true);
 document.addEventListener('keydown', e => {
   if (pickable(e.target) && (e.key === 'Enter' || e.key === ' ' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); openPicker(e.target); }
