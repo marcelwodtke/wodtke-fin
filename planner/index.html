@@ -552,6 +552,15 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 .icon-btn .ic { margin: auto; }
 .icon-del:hover { color: var(--neg); }
 .ex-note { color: var(--text); font-weight: 700; }
+
+/* Importar: bank statement rows (type picker instead of the installment field) */
+.stm-head, .stm-row { grid-template-columns: 112px minmax(120px, 1.15fr) 104px 96px 136px minmax(120px, 1fr) 120px; }
+.stm-row .stm-amt.pos { color: var(--in); } .stm-row .stm-amt.neg { color: var(--neg); }
+.stm-bal { margin: 0 0 12px; }
+@media (max-width: 900px) {
+  .stm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "date amount" "desc desc" "type tag" "st act"; }
+  .stm-row [data-f="type"] { grid-area: type; }
+}
 </style>
 </head>
 <body class="locked">
@@ -632,6 +641,7 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 <div class="toast" id="toast"></div>
 
 <script src="invoice.js"></script>
+<script src="bank.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -235,7 +235,7 @@ function invoiceRowsHtml() {
 function renderImport() {
   if (!imp.cardId && state.cards.length) imp.cardId = state.cards[0].id;
   if (!imp.month) { const c = state.cards.find(x => x.id === imp.cardId); const d = c ? invoiceDue(today(), c) : today(); imp.month = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
-  $view.innerHTML = `<div class="page-head"><div><h1>Importar</h1><p>Compras do Apple Pay e faturas do cartão em PDF.</p></div></div>
+  $view.innerHTML = `<div class="page-head"><div><h1>Importar</h1><p>Compras do Apple Pay, faturas do cartão e o extrato da conta.</p></div></div>
   <div class="panel"><h3>Apple Pay</h3>${inboxRowsHtml()}</div>
   <div class="panel" style="margin-top:16px"><h3>Fatura do cartão (PDF ou CSV)</h3>
     <p class="hint">O arquivo é lido aqui no aparelho e não é enviado para lugar nenhum. Nada é lançado até você tocar em Aplicar. O CSV serve para a fatura ainda aberta.</p>
@@ -246,7 +246,10 @@ function renderImport() {
     </div>
     ${imp.needPassword ? `<div class="inline inv-pass"><div class="field"><label>Senha do PDF (alguns bancos protegem a fatura, geralmente com parte do CPF)</label><input type="password" id="invPass" autocomplete="off"></div><button class="btn primary" data-act="invUnlock">Abrir</button></div>` : ''}
     ${csvMapHtml()}${invoiceRowsHtml()}` : '<div class="empty-state">Cadastre seus cartões em Ajustes para importar faturas.</div>'}
-  </div>`;
+  </div>
+  <div class="panel" style="margin-top:16px"><h3>Extrato da conta (OFX)</h3>
+    <p class="hint">Baixe o extrato no app ou site do banco no formato OFX. Cada movimentação é comparada com o que já está no app; nada é lançado até você tocar em Aplicar. Pagamentos de fatura do cartão vêm como Ignorar, porque as compras já estão no cartão.</p>
+    ${statementHtml()}</div>`;
   $view.querySelectorAll('.inv-row .money-input').forEach(applyMoneyMask);
 }
 
@@ -463,7 +466,7 @@ document.addEventListener('change', async e => {
     reconcile(); route();
   } else if (t.dataset.extra != null) {
     imp.extra[+t.dataset.extra].skip = t.checked; route();
-  } else if (t.closest('.inv-row')) {
+  } else if (t.closest('.inv-row:not(.stm-row)')) {
     const r = imp.rows[+t.closest('.inv-row').dataset.i], f = t.dataset.f;
     if (f === 'action') { r.action = t.value; r.touched = true; route(); return; }
     if (f === 'amount') r.amount = Math.abs(unmaskMoney(t.value));
