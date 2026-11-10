@@ -1024,7 +1024,8 @@ function openEntry(date, existing, opts = {}) {
     openModal(`<div class="modal-head"><h2>${from ? `Alterar a partir de ${fromLabel}` : existing ? 'Editar lançamento' : 'Novo lançamento'}</h2><button class="icon-btn" data-act="close">✕</button></div>
     <div class="modal-body">
       <div class="seg">${Object.entries(TYPES).map(([k, t]) => `<button class="${k === type ? 'on' : ''}" data-act="type" data-v="${k}"><span class="sw" style="background:${t.color}"></span>${t.label}</button>`).join('')}</div>
-      <div class="field"><label>Valor (R$)</label><input id="fAmt" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" value="${draw.amt == null || draw.amt === '' ? '' : typeof draw.amt === 'number' ? maskMoney(draw.amt) : draw.amt}"></div>
+      <div class="field"><label>Valor (R$)${isCard ? ' · use ± para um crédito que abate da fatura' : ''}</label>${(field => isCard ? `<div class="money-field"><button type="button" class="btn small" data-act="toggleSign" data-target="fAmt" title="Trocar entre compra e crédito (estorno, parte não paga)">±</button>${field}</div>` : field)(`<input id="fAmt" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" value="${draw.amt == null || draw.amt === '' ? '' : typeof draw.amt === 'number' ? maskMoney(isCard ? draw.amt : Math.abs(draw.amt)) : isCard ? draw.amt : String(draw.amt).replace(/^-/, '')}">`)}
+        <p class="hint" id="fCreditHint" style="margin:2px 0 0;display:none">Crédito no cartão: este valor é descontado da fatura.</p></div>
       <div class="field"><label>Descrição</label><input id="fDesc" placeholder="${TYPES[type].hint}" value="${esc(draw.desc ?? '')}"></div>
       <div class="inline"><div class="field"><label>${isCard ? 'Data da compra' : 'Data'}</label><input id="fDate" type="date" value="${draw.date ?? date ?? iso(today())}"></div>
         <div class="field"><label>Repetição</label><select id="fRep">${Object.entries(REPEATS).map(([k, l]) => `<option value="${k}" ${k === (draw.rep ?? 'none') ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
@@ -1047,6 +1048,7 @@ function openEntry(date, existing, opts = {}) {
       modal.querySelector('#fCountWrap').style.display = rep === 'installments' ? 'flex' : 'none';
       modal.querySelector('#fUntilWrap').style.display = OPEN_REPEATS.includes(rep) ? 'block' : 'none';
       modal.querySelector('#fTimesWrap').style.display = until === 'times' ? 'flex' : 'none';
+      const hint = modal.querySelector('#fCreditHint'); if (hint) hint.style.display = type === 'card' && unmaskMoney(modal.querySelector('#fAmt').value) < 0 ? 'block' : 'none';
       const amt = Math.abs(unmaskMoney(modal.querySelector('#fAmt').value)), d = modal.querySelector('#fDate').value;
       modal.querySelector('#fUntilHint').textContent = until !== 'times' ? 'Repete sem data para acabar.'
         : `${times} vez${times === 1 ? '' : 'es'} de ${money(amt)}${amt ? ` (total ${money(amt * times)})` : ''}${d ? ` · a última em ${parse(nthDate(d, rep, times)).toLocaleDateString('pt-BR')}` : ''}`;
@@ -1084,8 +1086,9 @@ function openEntry(date, existing, opts = {}) {
   Object.assign(draw, prefill || { amt: undefined, desc: undefined, date: undefined, rep: undefined, count: undefined, tag: '', card: undefined });
   openEntry.setType = v => { keep(); type = v; draw(); };
   openEntry.submit = () => {
-    const amount = Math.abs(unmaskMoney(modal.querySelector('#fAmt').value)), d = modal.querySelector('#fDate').value;
-    if (!(amount > 0)) return toast('Informe um valor maior que zero');
+    // card entries keep their sign (negative = a credit that comes off the invoice); every other type is positive
+    const typed = unmaskMoney(modal.querySelector('#fAmt').value), amount = type === 'card' ? typed : Math.abs(typed), d = modal.querySelector('#fDate').value;
+    if (!(Math.abs(amount) > 0)) return toast('Informe um valor diferente de zero');
     if (!d) return toast('Informe a data');
     const rep = modal.querySelector('#fRep').value;
     const entry = { id: uid(), type, amount, desc: modal.querySelector('#fDesc').value.trim(), date: d, repeat: rep, count: rep === 'installments' ? Math.max(2, parseInt(modal.querySelector('#fCount').value) || 2) : 1, tagId: modal.querySelector('#fTag').value, cardId: type === 'card' ? (modal.querySelector('#fCard')?.value || '') : '' };
@@ -1120,7 +1123,7 @@ function openDay(k) {
   };
   const items = r.items.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}${exNote(x)}</div></div>
-    <b class="num ${x.e.type === 'in' ? 'pos' : 'neg'}">${x.e.type === 'in' ? '+' : '−'}${money(x.amt)}</b><button class="icon-btn" title="Editar" aria-label="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.edit}</button><button class="icon-btn icon-del" title="Excluir" aria-label="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.trash}</button></div>`).join('');
+    <b class="num ${x.e.type === 'in' || x.amt < 0 ? 'pos' : 'neg'}">${x.e.type === 'in' || x.amt < 0 ? '+' : '−'}${money(Math.abs(x.amt))}</b><button class="icon-btn" title="Editar" aria-label="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.edit}</button><button class="icon-btn icon-del" title="Excluir" aria-label="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.trash}</button></div>`).join('');
   const skipped = (r.skipped || []).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
   openModal(`<div class="modal-head"><h2>${(t => t.charAt(0).toUpperCase() + t.slice(1))(r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2><button class="icon-btn" data-act="close">✕</button></div>
@@ -1273,8 +1276,9 @@ function openOccurrence(e, od) {
   modal.querySelector('#oSkip').addEventListener('click', () => { closeModal(); run(() => db.setException({ entryId: e.id, od, action: 'skip' }), 'Ocorrência pulada'); });
   modal.querySelector('#oReset')?.addEventListener('click', () => { closeModal(); run(() => db.clearException(e.id, od), 'Ocorrência voltou ao padrão'); });
   modal.querySelector('#oSave').addEventListener('click', () => {
-    const amount = Math.abs(unmaskMoney(modal.querySelector('#oAmt').value)), date = modal.querySelector('#oDate').value, desc = modal.querySelector('#oDesc').value.trim();
-    if (!(amount > 0)) return toast('Informe um valor maior que zero');
+    const typed = unmaskMoney(modal.querySelector('#oAmt').value), amount = e.type === 'card' ? typed : Math.abs(typed);
+    const date = modal.querySelector('#oDate').value, desc = modal.querySelector('#oDesc').value.trim();
+    if (!(Math.abs(amount) > 0)) return toast('Informe um valor diferente de zero');
     if (!date) return toast('Informe a data');
     if (desc.length > 200) return toast('Descrição muito longa (máx. 200)');
     // keep only what differs from the series, so later edits to the series still flow through
@@ -1335,6 +1339,7 @@ document.addEventListener('click', e => {
     case 'toggleSign': {
       const el = document.getElementById(a.dataset.target);
       el.value = el.value.trim().startsWith('-') ? el.value.trim().slice(1) : '-' + el.value.trim(); applyMoneyMask(el);
+      el.dispatchEvent(new Event('input', { bubbles: true })); // lets the form react (card credit hint)
       break;
     }
     case 'saveStart': {

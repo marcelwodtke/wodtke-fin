@@ -170,7 +170,12 @@ function reconcile() {
   const take = test => { const k = appItems.findIndex((x, j) => !used.has(j) && test(x)); if (k >= 0) used.add(k); return k >= 0 ? appItems[k] : null; };
   for (const r of imp.rows) {
     r.match = null; r.status = 'new';
-    if (r.credit) { r.status = r.kind === 'fee' ? 'fee' : 'credit'; r.action = r.touched ? r.action : 'skip'; continue; }
+    if (r.credit) {
+      r.status = r.kind === 'fee' ? 'fee' : 'credit'; r.action = r.touched ? r.action : 'skip';
+      // a refund already entered in the app as a card credit (negative) counts as matched
+      if (r.kind === 'credit') { const c = take(a => a.amt < 0 && Math.abs(-a.amt - r.amount) < 0.01 && daysApart(a.purchase, parse(r.date)) <= 5); if (c) { r.match = c; r.status = 'ok'; } }
+      continue;
+    }
     const amt = r.amount, d = parse(r.date);
     // a line dated outside this invoice's cycle is an installment of an older purchase
     r.old = !!card && !r.cnt && (() => { const due = invoiceDue(d, card); return due.getFullYear() !== y || due.getMonth() !== m - 1; })();
@@ -447,10 +452,7 @@ async function applyInvoice() {
   });
   // the closing entry: a card charge on this invoice when the app is short, or a credit on the due day when it has more
   if (fix > 0) entries.push({ type: 'card', cardId: card.id, desc: `Ajuste para fechar a fatura${imp.rollover ? ' (rotativo e encargos)' : ''}`, date: cycleDate(card), amount: fix, repeat: 'none', count: 1, tagId: '' });
-  if (fix < 0) {
-    const [y, m] = imp.month.split('-').map(Number);
-    entries.push({ type: 'in', cardId: '', desc: `Crédito para fechar a fatura do ${card.name}`, date: iso(monthDate(y, m - 1, card.due)), amount: -fix, repeat: 'none', count: 1, tagId: '' });
-  }
+  if (fix < 0) entries.push({ type: 'card', cardId: card.id, desc: 'Ajuste para fechar a fatura (crédito)', date: cycleDate(card), amount: fix, repeat: 'none', count: 1, tagId: '' });
   const total = entries.length + adjust.length + skip.length;
   let doneCount = 0;
   const b = busy('Aplicando a fatura…');
