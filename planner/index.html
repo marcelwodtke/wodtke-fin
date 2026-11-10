@@ -561,6 +561,12 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
   .stm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "date amount" "desc desc" "type tag" "st act"; }
   .stm-row [data-f="type"] { grid-area: type; }
 }
+
+/* invoice import: does it close with the invoice total? */
+.inv-close { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; }
+.inv-close.ok { background: color-mix(in srgb, var(--in) 12%, var(--surface)); color: color-mix(in srgb, var(--in) 70%, var(--text)); }
+.inv-close.gap { background: color-mix(in srgb, var(--daily) 16%, var(--surface)); cursor: pointer; }
+.inv-close input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--primary); }
 </style>
 </head>
 <body class="locked">

@@ -95,7 +95,13 @@ function parseInvoice(lines) {
     const d = line.match(DATE_START), a = line.match(AMOUNT_END);
     if (!d || !a || /venc|fechamento|total d[ae] fatura|melhor dia/i.test(line)) return;
     let desc = line.slice(d.index + d[0].length, a.index).replace(MONEY_ANY, ' ').replace(/[\s\-–+]+$/, '').replace(/\s+/g, ' ').trim();
-    if (!/[a-zà-ú]{2}/i.test(desc)) return; // a date followed only by numbers (limits, totals) is not a purchase
+    if (!/[a-zà-ú]{2}/i.test(desc)) {
+      // international purchases come in two lines: "ANTHROPIC* CLAUDE SUB - USD 21.73" and then "17/out R$ 109,77"
+      const prev = n > 0 ? lines[n - 1] : '';
+      const fx = /\b(usd|us\$|eur|€|gbp)\b/i.test(prev) && !DATE_START.test(prev) && prev.replace(/[-–]?\s*(usd|us\$|eur|€|gbp)\s*[\d.,]+/i, '').replace(/\s+/g, ' ').trim();
+      if (!fx || !/[a-zà-ú]{2}/i.test(fx)) return; // a date followed only by numbers (limits, totals) is not a purchase
+      desc = fx;
+    }
     const day = +(d[1] || d[4]), month = d[2] ? +d[2] - 1 : MONTHS_PT[d[5].slice(0, 3).toLowerCase()];
     if (day < 1 || day > 31 || month < 0 || month > 11) return;
     const yy = d[3] || d[6], year = yy ? year4(yy) : null;
@@ -109,7 +115,9 @@ function parseInvoice(lines) {
     const kind = negative || PAYMENT.test(desc) ? 'credit' : FEE.test(desc) ? 'fee' : '';
     items.push({ n, raw: line, day, month, year, desc, amount: brNumber(a[3]), i, cnt, credit: !!kind, kind });
   });
-  return { due, total, items };
+  // what was left unpaid from the previous invoice (it is part of this total, but not a purchase line)
+  const rollover = amountAfter(text, 'saldo do rotativo anterior');
+  return { due, total, items, rollover };
 }
 // The year of a line with no year: the latest one that keeps it on or before the invoice's due date.
 function lineDate(it, due) {
@@ -175,7 +183,10 @@ function reconcile() {
     else if ((x = take(a => daysApart(a.purchase, d) <= 3 && sameish(a.desc, r.desc)) || (r.cnt ? take(a => a.n === r.cnt && a.i === r.i && sameish(a.desc, r.desc)) : null))) { r.match = x; r.status = 'diff'; }
     if (!r.touched) r.action = r.status === 'new' ? 'add' : r.status === 'diff' ? 'adjust' : 'skip';
   }
-  imp.extra = appItems.filter((_, j) => !used.has(j)).map(x => ({ x, skip: false }));
+  imp.appTotal = appItems.reduce((a, x) => a + x.amt, 0)
+    // a closing credit entered earlier (when the app had more than the invoice) counts against this invoice too
+    - (card ? state.entries.filter(e => e.type === 'in' && e.desc === `Crédito para fechar a fatura do ${card.name}` && e.date.slice(0, 7) === imp.month).reduce((a, e) => a + e.amount, 0) : 0);
+  imp.extra = appItems.filter((x, j) => !used.has(j) && !/^Ajuste para fechar a fatura/.test(x.desc || '')).map(x => ({ x, skip: false }));
 }
 
 // ---------- page ----------
@@ -195,6 +206,19 @@ function inboxRowsHtml() {
   }).join('')}</div>`;
 }
 
+// What the invoice will add up to in the app once the marked actions are applied, and what is missing
+// to reach the invoice total (positive: the app is short; negative: the app has more than the bank).
+function invoiceGap() {
+  if (imp.total == null) return null;
+  let after = imp.appTotal || 0;
+  for (const r of imp.rows) {
+    if (r.action === 'add') after += r.amount;
+    else if (r.action === 'adjust' && r.match) after += r.amount - r.match.amt;
+  }
+  for (const e of imp.extra) if (e.skip) after -= e.x.amt;
+  after = Math.round(after * 100) / 100;
+  return { after, gap: Math.round((imp.total - after) * 100) / 100 };
+}
 const STATUS_LABEL = { ok: 'Já lançado', diff: 'Valor diferente', new: 'Novo', credit: 'Pagamento/crédito', fee: 'Tarifa/encargo' };
 function invoiceRowsHtml() {
   if (!imp.rows.length) return '';
@@ -208,6 +232,10 @@ function invoiceRowsHtml() {
       <span class="chip-s diff">${imp.rows.filter(r => r.status === 'diff').length} com valor diferente</span>
       <span class="chip-s new">${imp.rows.filter(r => r.status === 'new').length} novas</span>
     </div>
+    ${(g => !g ? '' : Math.abs(g.gap) < 0.01
+      ? `<div class="inv-close ok">✓ Fecha com a fatura: depois de aplicar, o app fica com <b>${money(g.after)}</b> neste cartão, igual ao total da fatura.</div>`
+      : `<label class="inv-close gap"><input type="checkbox" data-fixgap ${imp.fixGap ? 'checked' : ''}><span>A fatura soma <b>${money(imp.total)}</b> e, com o que está marcado, o app fica com <b>${money(g.after)}</b>. Diferença de <b>${money(Math.abs(g.gap))}</b>${imp.rollover && g.gap > 0 ? `, que inclui <b>${money(imp.rollover)}</b> que ficou da fatura anterior (rotativo) e os encargos` : ''}.<br>
+          <b>Lançar ${g.gap > 0 ? 'um ajuste' : 'um crédito'} de ${money(Math.abs(g.gap))} para fechar com a fatura</b></span></label>`)(invoiceGap())}
     <div class="inv-table"><div class="inv-head"><span>Data</span><span>Descrição</span><span>Parcela</span><span>Valor</span><span>Categoria</span><span>No app</span><span>Fazer</span></div>
     ${imp.rows.map((r, i) => `<div class="inv-row st-${r.status}" data-i="${i}">
       <input type="date" data-f="date" value="${r.date}">
@@ -272,7 +300,7 @@ function useInvoice(inv, kind) {
   if (inv.due) imp.month = `${inv.due.getFullYear()}-${pad(inv.due.getMonth() + 1)}`;
   const [y, m] = imp.month.split('-').map(Number);
   const due = inv.due || monthDate(y, m - 1, 28);
-  imp.total = inv.total;
+  imp.total = inv.total; imp.rollover = inv.rollover || null; imp.fixGap = true;
   imp.rows = inv.items.map(it => ({ ...it, date: iso(lineDate(it, due)), action: 'skip', touched: false, tagId: guessTag(it.desc) }));
   reconcile();
   if (!imp.rows.length) { toast(`Nenhuma compra encontrada no ${kind}; veja o texto lido ou adicione linhas`); imp.showText = true; }
@@ -404,8 +432,9 @@ async function applyInvoice() {
   const card = state.cards.find(c => c.id === imp.cardId);
   if (!card) return;
   const add = imp.rows.filter(r => r.action === 'add'), adjust = imp.rows.filter(r => r.action === 'adjust' && r.match), skip = imp.extra.filter(e => e.skip);
-  if (!add.length && !adjust.length && !skip.length) return toast('Nada marcado para aplicar');
-  if (!(await ask(`Aplicar na fatura do ${card.name}?\n\n${add.length} lançar · ${adjust.length} ajustar valor · ${skip.length} pular`, { ok: 'Aplicar' }))) return;
+  const g = invoiceGap(), fix = g && imp.fixGap && Math.abs(g.gap) >= 0.01 ? g.gap : 0;
+  if (!add.length && !adjust.length && !skip.length && !fix) return toast('Nada marcado para aplicar');
+  if (!(await ask(`Aplicar na fatura do ${card.name}?\n\n${add.length} lançar · ${adjust.length} ajustar valor · ${skip.length} pular${fix ? `\n${fix > 0 ? 'Ajuste' : 'Crédito'} de ${money(Math.abs(fix))} para fechar com a fatura (${money(imp.total)})` : ''}`, { ok: 'Aplicar' }))) return;
   const entries = add.map(r => {
     // an older purchase with no installment info is entered once, on this invoice, keeping its date in the text
     const bought = parse(r.date).toLocaleDateString('pt-BR');
@@ -416,6 +445,12 @@ async function applyInvoice() {
       : { desc: r.desc, date: r.date, amount: r.amount, repeat: 'none', count: 1 };
     return Object.assign(e, { type: 'card', cardId: card.id, tagId: r.tagId || '' });
   });
+  // the closing entry: a card charge on this invoice when the app is short, or a credit on the due day when it has more
+  if (fix > 0) entries.push({ type: 'card', cardId: card.id, desc: `Ajuste para fechar a fatura${imp.rollover ? ' (rotativo e encargos)' : ''}`, date: cycleDate(card), amount: fix, repeat: 'none', count: 1, tagId: '' });
+  if (fix < 0) {
+    const [y, m] = imp.month.split('-').map(Number);
+    entries.push({ type: 'in', cardId: '', desc: `Crédito para fechar a fatura do ${card.name}`, date: iso(monthDate(y, m - 1, card.due)), amount: -fix, repeat: 'none', count: 1, tagId: '' });
+  }
   const total = entries.length + adjust.length + skip.length;
   let doneCount = 0;
   const b = busy('Aplicando a fatura…');
@@ -464,6 +499,8 @@ document.addEventListener('change', async e => {
   } else if (t.id === 'invCard' || t.id === 'invMonth') {
     if (t.id === 'invCard') { imp.cardId = t.value; imp.cardTouched = true; } else imp.month = t.value;
     reconcile(); route();
+  } else if (t.hasAttribute('data-fixgap')) {
+    imp.fixGap = t.checked; route();
   } else if (t.dataset.extra != null) {
     imp.extra[+t.dataset.extra].skip = t.checked; route();
   } else if (t.closest('.inv-row:not(.stm-row)')) {
