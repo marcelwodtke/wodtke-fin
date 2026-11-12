@@ -470,6 +470,7 @@ function openTypeMenu(btn) {
   const menu = document.createElement('div');
   menu.className = 'type-menu'; menu.id = 'typeMenu'; menu.setAttribute('role', 'listbox');
   menu.style.top = `${Math.round(r.bottom + 6)}px`; menu.style.left = `${Math.round(Math.max(8, r.left))}px`;
+  menu.style.width = `${Math.round(r.width)}px`; // the same width as the box it drops from
   menu.innerHTML = FLOW_KEYS.map(k => `<button type="button" role="option" aria-selected="${k === phoneType}" class="tm-opt${k === phoneType ? ' on' : ''}" data-v="${k}" style="--c:${TYPES[k].color}">
       <span class="tdot ti">${TICON[k]}</span><span class="tm-name">${TYPES[k].plural}</span>
       <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
