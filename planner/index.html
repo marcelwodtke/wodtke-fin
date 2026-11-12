@@ -315,7 +315,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
 /* modal */
 .overlay { position: fixed; inset: 0; background: rgba(8, 15, 30, .45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
 .overlay.open { display: flex; }
-.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; width: 100%; max-width: 480px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; width: 100%; max-width: 640px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border); flex: none; }
 .modal-head h2 { margin: 0; font-size: 17px; }
 /* only the middle scrolls: the title bar and the buttons stay in place */
@@ -571,6 +571,26 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 /* card invoice on its due day, with "pagar só uma parte" / "parcelar" */
 .inv-day { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
 .inv-day .grow { flex: 1 1 140px; }
+
+/* popup header: "‹ Voltar" back to the day list, and the close button (✕ on wide screens) */
+.modal-head { gap: 10px; }
+.modal-head h2 { flex: 1; min-width: 0; }
+.modal-back, .modal-x { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; height: 36px; padding: 0 10px 0 6px; font: inherit; font-weight: 800; font-size: 14px; cursor: pointer; flex: none; }
+.modal-x { width: 36px; padding: 0; justify-content: center; }
+.modal-back:hover, .modal-x:hover { background: var(--surface-2); }
+.modal-x .x-back { display: none; }
+@media (max-width: 640px) {
+  /* phones: the popup is a full screen page; "‹ Voltar" on the left closes it (or returns to the day) */
+  .overlay { padding: 0; }
+  .modal { max-width: none; width: 100%; height: 100%; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); }
+  .modal-foot { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .modal-head { justify-content: flex-start; padding: 12px 14px; }
+  .modal-head .modal-x { order: -1; width: auto; padding: 0 10px 0 6px; border: 0; }
+  .modal-head .modal-x .x-icon { display: none; }
+  .modal-head .modal-x .x-back { display: inline-flex; align-items: center; gap: 2px; }
+  .modal-head.has-back .modal-x { display: none; }
+  .modal-back { border: 0; }
+}
 </style>
 </head>
 <body class="locked">

@@ -256,6 +256,8 @@ async function run(fn, okMsg) {
   try { await fn(); if (okMsg) toast(okMsg); }
   catch (err) { console.error(err); toast('Não foi possível salvar: ' + (err.message || 'erro de conexão')); }
   route();
+  // saved from a popup opened out of a day's list: show that list again
+  if (returnDay && !overlay.classList.contains('open')) { const k = returnDay; returnDay = null; openDay(k); }
 }
 
 let state = emptyState();
@@ -1006,7 +1008,22 @@ function route() {
 
 // ---------- modals ----------
 const overlay = document.getElementById('overlay'), modal = document.getElementById('modal');
-function openModal(html) { modal.innerHTML = html; overlay.classList.add('open'); }
+// A popup opened from a day's list remembers that day (returnDay): it gets a "‹ Voltar" button,
+// and after saving the list opens again. Popups chained from it (series choice → editor) keep it.
+let returnDay = null;
+const BACK_ICON = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+function openModal(html) {
+  modal.innerHTML = html; delete modal.dataset.day;
+  const head = modal.querySelector('.modal-head');
+  if (head) {
+    head.classList.toggle('has-back', !!returnDay);
+    if (returnDay) head.insertAdjacentHTML('afterbegin', `<button class="modal-back" data-act="modalBack" aria-label="Voltar para o dia">${BACK_ICON}<span>Voltar</span></button>`);
+    // on phones the close button reads "‹ Voltar" and sits on the left (the popup fills the screen)
+    const x = head.querySelector('[data-act="close"]');
+    if (x) { x.classList.add('modal-x'); x.innerHTML = `<span class="x-icon">✕</span><span class="x-back">${BACK_ICON}<span>Voltar</span></span>`; x.setAttribute('aria-label', 'Fechar'); }
+  }
+  overlay.classList.add('open');
+}
 function closeModal() { overlay.classList.remove('open'); }
 // forms close only through their own buttons (✕, Cancelar…): a click beside them must not throw away what was typed
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
@@ -1193,6 +1210,7 @@ function openInstallPlan(cardId, due, total) {
 }
 
 function openDay(k) {
+  returnDay = null;
   const rows = computeRows(parse(k)), r = rows.find(x => x.k === k);
   if (!r) return toast('Data anterior ao ponto de partida');
   const tagName = id => state.tags.find(t => t.id === id)?.name;
@@ -1217,6 +1235,7 @@ function openDay(k) {
   <div class="modal-body">${bills}<div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
+  modal.dataset.day = k;
 }
 
 // For a recurring entry, ask whether a change applies to one occurrence, the rest of the series, or all of it.
@@ -1414,6 +1433,7 @@ function applyTheme() { if (state.theme === 'system') document.documentElement.r
 
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
+  if (a && ['editOcc', 'delOcc', 'addOn', 'payPart', 'payPlan', 'restoreOcc'].includes(a.dataset.act) && modal.dataset.day && overlay.classList.contains('open') && a.closest('#modal')) returnDay = modal.dataset.day;
   if (!a) { const row = e.target.closest('[data-day]'); if (row && !modal.contains(row)) openDay(row.dataset.day); return; }
   const act = a.dataset.act, shift = n => { const f = monthDate(view.y, view.m + n, 1); view = { y: f.getFullYear(), m: f.getMonth() }; route(); };
   const fshift = n => { const f = monthDate(focus.y, focus.m + n, 1); focus = { y: f.getFullYear(), m: f.getMonth() }; route(); };
@@ -1474,7 +1494,8 @@ document.addEventListener('click', e => {
     case 'report': shareReport(focus.y, focus.m); break;
     case 'fprev': fshift(-1); break;
     case 'fnext': fshift(1); break;
-    case 'close': closeModal(); break;
+    case 'close': returnDay = null; closeModal(); break;
+    case 'modalBack': { const k = returnDay; returnDay = null; if (k) openDay(k); else closeModal(); break; }
     case 'type': openEntry.setType(a.dataset.v); break;
     case 'saveEntry': openEntry.submit(); break;
     case 'addOn': openEntry(a.dataset.day); break;
