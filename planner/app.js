@@ -27,6 +27,16 @@ const TYPES = {
   card:  { label: 'Cartão',    plural: 'Cartão',     hint: 'compras no crédito',   color: 'var(--card)' },
 };
 const FLOW_KEYS = ['in', 'out', 'daily', 'save', 'card'];
+// one small line icon per type (Lucide, ISC licence), drawn in the type's colour
+const TICON = Object.fromEntries(Object.entries({
+  in: '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+  out: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  daily: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  save: '<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
+  card: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
+}).map(([k, d]) => [k, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`]));
+// the type mark used in lists (where a category would show its colour square)
+const typeMark = t => `<span class="sw ti" style="--c:${TYPES[t].color}">${TICON[t]}</span>`;
 const shortNum = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const REPEATS = { none: 'Não repete', monthly: 'Todo mês', weekly: 'Toda semana', daily: 'Todo dia', installments: 'Parcelado' };
 // repeats that can run forever or a set number of times ("Até quando")
@@ -361,9 +371,9 @@ const $view = document.getElementById('view');
 // a value cell of the web table: the type's colour dot on the left (faded when empty), the amount on the right
 const cell = (v, k) => {
   const has = Math.abs(v) >= 0.005;
-  return `<td class="num${has ? '' : ' zero'}" data-type="${k}"><div class="cv${has ? ' has' : ''}" style="--c:${TYPES[k].color}"><span class="tdot"></span><span>${money(has ? v : 0)}</span></div></td>`;
+  return `<td class="num${has ? '' : ' zero'}" data-type="${k}"><div class="cv${has ? ' has' : ''}" style="--c:${TYPES[k].color}"><span class="tdot ti">${TICON[k]}</span><span>${money(has ? v : 0)}</span></div></td>`;
 };
-const dot = t => `<span class="dot" style="background:${TYPES[t].color}"></span>`;
+const dot = t => `<span class="dot ti" style="--c:${TYPES[t].color}">${TICON[t]}</span>`;
 
 function rangeControl(label) {
   return `<div class="range">
@@ -421,7 +431,7 @@ function dayListHtml(mr, t, type) {
     const v = r[ty], has = Math.abs(v) >= 0.005;
     const fc = ty === 'daily' && r.budget && !r.items.some(x => x.e.type === 'daily');
     const amount = has ? `<span class="tval${fc ? ' fc' : ''}">${money(v)}</span>` : `<span class="tval zero">${money(0)}</span>`;
-    return `<span class="pane${has ? ' has' : ''}" style="--c:${TYPES[ty].color}"><span class="tdot"></span>${amount}</span>`;
+    return `<span class="pane${has ? ' has' : ''}" style="--c:${TYPES[ty].color}"><span class="tdot ti">${TICON[ty]}</span>${amount}</span>`;
   };
   return mr.map(r => {
     const wk = [0, 6].includes(r.d.getDay());
@@ -434,7 +444,7 @@ function dayListHtml(mr, t, type) {
 function flowListHead() {
   return `<div class="list-head"><span>Dia</span>
     <button type="button" class="type-pick" style="--c:${TYPES[phoneType].color}" data-act="typeMenu" aria-haspopup="listbox" aria-expanded="false" aria-label="Tipo de lançamento: ${TYPES[phoneType].plural}">
-      <span class="tdot"></span><span class="tname">${TYPES[phoneType].plural}</span>
+      <span class="tdot ti">${TICON[phoneType]}</span><span class="tname">${TYPES[phoneType].plural}</span>
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <span>Saldo</span></div>`;
@@ -448,7 +458,7 @@ function openTypeMenu(btn) {
   menu.className = 'type-menu'; menu.id = 'typeMenu'; menu.setAttribute('role', 'listbox');
   menu.style.top = `${Math.round(r.bottom + 6)}px`; menu.style.left = `${Math.round(Math.max(8, r.left))}px`;
   menu.innerHTML = FLOW_KEYS.map(k => `<button type="button" role="option" aria-selected="${k === phoneType}" class="tm-opt${k === phoneType ? ' on' : ''}" data-v="${k}" style="--c:${TYPES[k].color}">
-      <span class="tdot"></span><span class="tm-name">${TYPES[k].plural}</span>
+      <span class="tdot ti">${TICON[k]}</span><span class="tm-name">${TYPES[k].plural}</span>
       <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
   menu.addEventListener('click', e => { const o = e.target.closest('.tm-opt'); if (o) { closeTypeMenu(); slideToType(o.dataset.v, Math.sign(FLOW_KEYS.indexOf(o.dataset.v) - FLOW_KEYS.indexOf(phoneType))); } });
   document.body.appendChild(menu);
@@ -468,9 +478,9 @@ function openPickMenu(sel) {
   menu.className = 'type-menu pick-menu'; menu.id = 'pickMenu'; menu.setAttribute('role', 'listbox');
   menu.style.minWidth = `${Math.round(Math.max(180, r.width))}px`;
   // options with data-c get their colour dot (like the type menu); the others keep the space so names line up
-  const dots = opts.some(o => o.dataset.c);
-  menu.innerHTML = opts.map(o => `<button type="button" role="option" aria-selected="${o.selected}" class="tm-opt${o.selected ? ' on' : ''}" data-v="${esc(o.value)}" ${o.disabled ? 'disabled' : ''} style="--c:${o.dataset.c ? esc(o.dataset.c) : 'var(--text)'}">
-      ${dots ? `<span class="tdot${o.dataset.c ? '' : ' tdot-none'}"></span>` : ''}<span class="tm-name">${esc(o.textContent)}</span>
+  const dots = opts.some(o => o.dataset.c || o.dataset.t);
+  menu.innerHTML = opts.map(o => `<button type="button" role="option" aria-selected="${o.selected}" class="tm-opt${o.selected ? ' on' : ''}" data-v="${esc(o.value)}" ${o.disabled ? 'disabled' : ''} style="--c:${o.dataset.t ? TYPES[o.dataset.t].color : o.dataset.c ? esc(o.dataset.c) : 'var(--text)'}">
+      ${dots ? (o.dataset.t ? `<span class="tdot ti">${TICON[o.dataset.t]}</span>` : `<span class="tdot${o.dataset.c ? '' : ' tdot-none'}"></span>`) : ''}<span class="tm-name">${esc(o.textContent)}</span>
       <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
   document.body.appendChild(menu);
   // below the field, or above it when there is no room; never wider than the screen
@@ -744,8 +754,8 @@ function renderSummary() {
     <div class="panel"><h3>Para onde vai o dinheiro</h3><p class="hint">Composição das saídas do mês.</p>
       <div class="stack">${parts.map(p => `<span style="width:${(p.v / outs) * 100}%;background:${TYPES[p.k].color}" title="${TYPES[p.k].plural}"></span>`).join('')}</div>
       <div class="rows">
-        <div class="row"><span class="sw" style="background:${TYPES.in.color}"></span><div class="grow">Receitas</div><b class="num">${money(inc)}</b></div>
-        ${['out', 'daily', 'save', 'card'].map(k => `<div class="row"><span class="sw" style="background:${TYPES[k].color}"></span><div class="grow">${TYPES[k].plural}</div><span class="sub">${outs ? Math.round((tot(k) / outs) * 100) : 0}%</span><b class="num">${money(tot(k))}</b></div>`).join('')}
+        <div class="row">${typeMark('in')}<div class="grow">Receitas</div><b class="num">${money(inc)}</b></div>
+        ${['out', 'daily', 'save', 'card'].map(k => `<div class="row">${typeMark(k)}<div class="grow">${TYPES[k].plural}</div><span class="sub">${outs ? Math.round((tot(k) / outs) * 100) : 0}%</span><b class="num">${money(tot(k))}</b></div>`).join('')}
       </div></div>
     <div class="panel"><h3>Saldo no mês</h3><p class="hint">Pontos de atenção do período.</p>
       <div class="rows">
@@ -755,7 +765,7 @@ function renderSummary() {
         <div class="row"><div class="grow">Orçamento diário previsto<div class="sub">${money(dailyBudget(mr[0].d))} por dia nos dias futuros</div></div><b class="num">${money(sum(mr, 'budget'))}</b></div>
       </div>
       <h3 style="margin-top:18px">Próximos lançamentos</h3>
-      <div class="rows">${upcoming.length ? upcoming.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow">${esc(x.desc || TYPES[x.e.type].label)}<div class="sub">${x.d.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num">${money(x.amt)}</b></div>`).join('') : '<div class="empty-state">Nada agendado.</div>'}</div>
+      <div class="rows">${upcoming.length ? upcoming.map(x => `<div class="row">${typeMark(x.e.type)}<div class="grow">${esc(x.desc || TYPES[x.e.type].label)}<div class="sub">${x.d.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num">${money(x.amt)}</b></div>`).join('') : '<div class="empty-state">Nada agendado.</div>'}</div>
     </div>
   </div>
   <div class="report-bar"><button class="btn primary" data-act="report">⤓ Relatório do mês em PDF</button></div>`;
@@ -1042,7 +1052,7 @@ function openEntry(date, existing, opts = {}) {
     const isCard = type === 'card';
     openModal(`<div class="modal-head"><h2>${from ? `Alterar a partir de ${fromLabel}` : existing ? 'Editar lançamento' : 'Novo lançamento'}</h2><button class="icon-btn" data-act="close">✕</button></div>
     <div class="modal-body">
-      <div class="seg">${Object.entries(TYPES).map(([k, t]) => `<button class="${k === type ? 'on' : ''}" data-act="type" data-v="${k}"><span class="sw" style="background:${t.color}"></span>${t.label}</button>`).join('')}</div>
+      <div class="seg">${Object.entries(TYPES).map(([k, t]) => `<button class="${k === type ? 'on' : ''}" data-act="type" data-v="${k}">${typeMark(k)}${t.label}</button>`).join('')}</div>
       <div class="field"><label>Valor (R$)${isCard ? ' · use ± para um crédito que abate da fatura' : ''}</label>${(field => isCard ? `<div class="money-field"><button type="button" class="btn small" data-act="toggleSign" data-target="fAmt" title="Trocar entre compra e crédito (estorno, parte não paga)">±</button>${field}</div>` : field)(`<input id="fAmt" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" value="${draw.amt == null || draw.amt === '' ? '' : typeof draw.amt === 'number' ? maskMoney(isCard ? draw.amt : Math.abs(draw.amt)) : isCard ? draw.amt : String(draw.amt).replace(/^-/, '')}">`)}
         <p class="hint" id="fCreditHint" style="margin:2px 0 0;display:none">Crédito no cartão: este valor é descontado da fatura.</p></div>
       <div class="field"><label>Descrição</label><input id="fDesc" placeholder="${TYPES[type].hint}" value="${esc(draw.desc ?? '')}"></div>
@@ -1245,10 +1255,10 @@ function openDay(k, only) {
   };
   const shows = t => !only || only === t;
   const bills = shows('card') ? invoicesOn(r) : [], locked = new Set(invoicesOn(r).filter(v => v.settle).map(v => v.card.id));
-  const items = r.items.filter(x => shows(x.e.type) && !(x.card && locked.has(x.card.id))).map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
+  const items = r.items.filter(x => shows(x.e.type) && !(x.card && locked.has(x.card.id))).map(x => `<div class="row">${typeMark(x.e.type)}<div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">${TYPES[x.e.type].label}${x.e.repeat !== 'none' ? ` · ${REPEATS[x.e.repeat].toLowerCase()}` : ''}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}${x.card ? ` · ${esc(x.card.name)}, compra em ${x.purchase.toLocaleDateString('pt-BR')}` : ''}${tagName(x.e.tagId) ? ` · ${esc(tagName(x.e.tagId))}` : ''}${exNote(x)}</div></div>
     <b class="num ${x.e.type === 'in' || x.amt < 0 ? 'pos' : 'neg'}">${x.e.type === 'in' || x.amt < 0 ? '+' : '−'}${money(Math.abs(x.amt))}</b><button class="icon-btn" title="Editar" aria-label="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.edit}</button><button class="icon-btn icon-del" title="Excluir" aria-label="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.trash}</button></div>`).join('');
-  const skipped = (r.skipped || []).filter(x => shows(x.e.type)).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
+  const skipped = (r.skipped || []).filter(x => shows(x.e.type)).map(x => `<div class="row" style="opacity:.6">${typeMark(x.e.type)}<div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
   // on a card's due day: its invoice total, with the two ways of not paying it all at once
   // on a card's due day: its invoice total, with the two ways of not paying it all at once; once settled,
@@ -1263,11 +1273,11 @@ function openDay(k, only) {
         <div class="sub">Sai da conta hoje: <b>${money(v.total)}</b> · fatura original ${money(v.total - v.settle.amt)}${rest ? ` · ${esc(rest.desc)}` : ''}</div></div>
       <button class="btn small danger" data-act="undoSettle" data-id="${v.settle.e.id}">Desfazer ${split ? 'parcelamento' : 'pagamento parcial'}</button>
       <details class="inv-lines"><summary>Ver os ${lines.length} lançamentos da fatura</summary>
-        <div class="rows">${lines.map(x => `<div class="row"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b><div class="sub">compra em ${x.purchase.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num ${x.amt < 0 ? 'pos' : 'neg'}">${x.amt < 0 ? '+' : '−'}${money(Math.abs(x.amt))}</b></div>`).join('')}</div>
+        <div class="rows">${lines.map(x => `<div class="row">${typeMark(x.e.type)}<div class="grow"><b>${esc(x.desc || TYPES[x.e.type].label)}</b><div class="sub">compra em ${x.purchase.toLocaleDateString('pt-BR')}${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num ${x.amt < 0 ? 'pos' : 'neg'}">${x.amt < 0 ? '+' : '−'}${money(Math.abs(x.amt))}</b></div>`).join('')}</div>
       </details></div>`;
   }).join('');
   openModal(`<div class="modal-head"><h2>${(t => t.charAt(0).toUpperCase() + t.slice(1))(r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2><button class="icon-btn" data-act="close">✕</button></div>
-  <div class="modal-body"><div class="field day-filter"><label>Mostrar</label><select id="dayFilter"><option value="">Todos</option>${FLOW_KEYS.map(t => `<option value="${t}" data-c="${TYPES[t].color}" ${t === only ? 'selected' : ''}>${TYPES[t].plural}</option>`).join('')}</select></div>
+  <div class="modal-body"><div class="field day-filter"><label>Mostrar</label><select id="dayFilter"><option value="">Todos</option>${FLOW_KEYS.map(t => `<option value="${t}" data-t="${t}" ${t === only ? 'selected' : ''}>${TYPES[t].plural}</option>`).join('')}</select></div>
   ${billsHtml}<div class="rows">${items}${skipped}${r.budget && shows('daily') ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !(r.budget && shows('daily')) && !billsHtml ? `<div class="empty-state">${only ? `Nenhum lançamento de ${TYPES[only].plural.toLowerCase()} neste dia.` : 'Nenhum lançamento neste dia.'}</div>` : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
@@ -1383,7 +1393,7 @@ function openInbox() {
   <div class="modal-body">${items.length ? `<p class="hint" style="margin:0 0 10px">Cada compra vira um lançamento só quando você confirmar.</p><div class="rows">${items.map(x => {
     const d = importDefaults(x), card = d.type === 'card' && state.cards.find(c => c.id === d.cardId);
     const guess = [TYPES[d.type].label, card ? card.name : '', tagName(d.tagId) || ''].filter(Boolean).join(' · ');
-    return `<div class="row"><span class="sw" style="background:${TYPES[d.type].color}"></span><div class="grow"><b>${esc(x.merchant || 'Compra Apple Pay')}</b>
+    return `<div class="row">${typeMark(d.type)}<div class="grow"><b>${esc(x.merchant || 'Compra Apple Pay')}</b>
       <div class="sub">${parse(x.date).toLocaleDateString('pt-BR')}${x.card ? ` · ${esc(x.card)}` : ''}<br>vai como: ${esc(guess)}</div></div>
       <b class="num">${money(x.amount)}</b>
       <div style="display:flex;flex-direction:column;gap:4px"><button class="btn small primary" data-act="inboxUse" data-id="${x.id}">Lançar</button><button class="btn small" data-act="inboxDrop" data-id="${x.id}">Descartar</button></div></div>`;

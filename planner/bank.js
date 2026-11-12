@@ -97,7 +97,7 @@ function statementHtml() {
     ${stm.rows.map((r, i) => `<div class="inv-row stm-row st-${r.status === 'cardbill' ? 'credit' : r.status}" data-i="${i}">
       <input type="date" data-f="date" value="${r.date}">
       <input type="text" data-f="desc" value="${esc(r.desc)}" title="${esc(r.memo)}">
-      <select data-f="type">${STM_TYPES.map(k => `<option value="${k}" ${k === r.type ? 'selected' : ''}>${TYPES[k].label}</option>`).join('')}</select>
+      <select data-f="type">${STM_TYPES.map(k => `<option value="${k}" data-t="${k}" ${k === r.type ? 'selected' : ''}>${TYPES[k].label}</option>`).join('')}</select>
       <input type="text" inputmode="numeric" data-f="amount" class="money-input stm-amt ${r.dir === 'in' ? 'pos' : 'neg'}" value="${maskMoney(r.amount)}">
       <select data-f="tagId" class="inv-tag"><option value="">Sem categoria</option>${state.tags.map(t => `<option value="${t.id}" ${t.id === r.tagId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
       <span class="inv-st"><i class="chip-s ${r.status === 'cardbill' ? 'credit' : r.status}">${STM_LABEL[r.status]}</i>${r.match ? `<small>${esc(r.match.desc || TYPES[r.match.e.type].label)} · ${money(r.match.amt)} · ${r.match.on.toLocaleDateString('pt-BR')}</small>` : r.card ? '<small>as compras já estão no cartão</small>' : ''}</span>
@@ -108,7 +108,7 @@ function statementHtml() {
       </select></div>`).join('')}
     </div>
     ${stm.extra.length ? `<h3 style="margin-top:18px">No app, mas não no extrato</h3><p class="hint">Lançamentos do período que não apareceram no banco. Marque os que não aconteceram para pular só esta ocorrência.</p>
-      <div class="rows">${stm.extra.map((e, j) => `<label class="row inv-extra"><input type="checkbox" data-stm-extra="${j}" ${e.skip ? 'checked' : ''}><span class="sw" style="background:${TYPES[e.x.e.type].color}"></span><div class="grow"><b>${esc(e.x.desc || TYPES[e.x.e.type].label)}</b><div class="sub">${TYPES[e.x.e.type].label} · ${e.x.on.toLocaleDateString('pt-BR')}</div></div><b class="num">${money(e.x.amt)}</b></label>`).join('')}</div>` : ''}
+      <div class="rows">${stm.extra.map((e, j) => `<label class="row inv-extra"><input type="checkbox" data-stm-extra="${j}" ${e.skip ? 'checked' : ''}>${typeMark(e.x.e.type)}<div class="grow"><b>${esc(e.x.desc || TYPES[e.x.e.type].label)}</b><div class="sub">${TYPES[e.x.e.type].label} · ${e.x.on.toLocaleDateString('pt-BR')}</div></div><b class="num">${money(e.x.amt)}</b></label>`).join('')}</div>` : ''}
     <div class="inv-apply"><button class="btn primary" data-act="stmApply">Aplicar: ${count('add')} lançar · ${count('adjust')} ajustar${stm.extra.some(e => e.skip) ? ` · ${stm.extra.filter(e => e.skip).length} pular` : ''}</button>
       <button class="btn" data-act="stmReset">Limpar alterações</button>
       <button class="btn" data-act="stmCancel">Cancelar importação</button></div>`;

@@ -605,6 +605,15 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 .day-filter select { max-width: 220px; }
 
 .tm-opt .tdot-none { background: none; box-shadow: inset 0 0 0 1.5px var(--border); }
+
+/* type icons in place of the colour dots (TICON in app.js) */
+.ti { background: none !important; border-radius: 0 !important; box-shadow: none !important; color: var(--c); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.ti svg { width: 100%; height: 100%; display: block; }
+.tdot.ti { width: 15px; height: 15px; }
+.tm-opt .tdot.ti, .type-pick .tdot.ti { width: 17px; height: 17px; }
+.sw.ti { width: 17px; height: 17px; }
+.dot.ti { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; display: inline-flex; }
+.seg button .sw.ti { width: 18px; height: 18px; }
 </style>
 </head>
 <body class="locked">

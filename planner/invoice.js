@@ -204,7 +204,7 @@ function inboxRowsHtml() {
   return `<div class="rows">${items.map(x => {
     const d = importDefaults(x), card = d.type === 'card' && state.cards.find(c => c.id === d.cardId);
     const guess = [TYPES[d.type].label, card ? card.name : '', tagName(d.tagId) || ''].filter(Boolean).join(' · ');
-    return `<div class="row"><span class="sw" style="background:${TYPES[d.type].color}"></span><div class="grow"><b>${esc(x.merchant || 'Compra Apple Pay')}</b>
+    return `<div class="row">${typeMark(d.type)}<div class="grow"><b>${esc(x.merchant || 'Compra Apple Pay')}</b>
       <div class="sub">${parse(x.date).toLocaleDateString('pt-BR')}${x.card ? ` · ${esc(x.card)}` : ''}<br>vai como: ${esc(guess)}</div></div>
       <b class="num">${money(x.amount)}</b>
       <div style="display:flex;flex-direction:column;gap:4px"><button class="btn small primary" data-act="inboxUse" data-id="${x.id}">Lançar</button><button class="btn small" data-act="inboxDrop" data-id="${x.id}">Descartar</button></div></div>`;
