@@ -416,7 +416,7 @@ table.horizon td:not(.dnum):not(.empty):hover { outline: 2px solid var(--text); 
   .type-pick svg { color: var(--muted); flex: none; }
   .type-pick { cursor: pointer; font-family: inherit; }
   .type-pick[aria-expanded="true"] { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
-  .type-pick[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .type-pick[aria-expanded="true"] > svg { transform: rotate(180deg); }
   .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
   body[data-route="fluxo"] .drow { padding: 0; gap: 0; min-height: 48px; align-items: stretch; }
   body[data-route="fluxo"] .drow > div { display: flex; align-items: center; min-width: 0; }
@@ -627,12 +627,12 @@ table.flow .cv .tdot.ti { width: 15px; height: 15px; }
 .mbar .cal-btn svg { width: 28px; height: 28px; }
 /* phone list type picker: a bigger box, the type's icon in its colour (the chevron stays gray) */
 @media (max-width: 640px) {
-  .type-pick { padding: 10px 16px; gap: 9px; font-size: 16px; }
-  .type-pick .tdot.ti { width: 21px; height: 21px; }
   .type-pick .tdot.ti svg { color: var(--c); }
-  .type-pick > svg { width: 18px; height: 18px; }
   /* the box may reach into the Saldo column, whose label sits at the far right */
-  .list-head .type-pick { max-width: none; width: 184px; justify-content: center; }
+  /* fixed width (the longest name fits with room to spare), centred across the whole bar */
+  .list-head > span:first-child { grid-column: 1; grid-row: 1; }
+  .list-head > span:last-child { grid-column: 3; grid-row: 1; }
+  .list-head .type-pick { grid-column: 1 / -1; grid-row: 1; justify-self: center; margin-left: 0; max-width: none; width: 160px; justify-content: center; }
   .type-pick .tname { overflow: visible; text-overflow: clip; }
 }
 </style>
