@@ -609,11 +609,18 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 /* type icons in place of the colour dots (TICON in app.js) */
 .ti { background: none !important; border-radius: 0 !important; box-shadow: none !important; color: var(--c); display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .ti svg { width: 100%; height: 100%; display: block; }
-.tdot.ti { width: 15px; height: 15px; }
+.tdot.ti { width: 18px; height: 18px; }
 .tm-opt .tdot.ti, .type-pick .tdot.ti { width: 17px; height: 17px; }
 .sw.ti { width: 17px; height: 17px; }
-.dot.ti { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; display: inline-flex; }
+.dot.ti { width: 19px; height: 19px; margin-right: 7px; vertical-align: -4px; display: inline-flex; }
 .seg button .sw.ti { width: 18px; height: 18px; }
+
+/* a select showing a type: its icon on the left (set by syncSelectIcon), the arrow on the right */
+select.has-ti:not([data-native]) { background-position: left 12px center, right 10px center !important; background-size: 18px, 16px !important; background-repeat: no-repeat !important; padding-left: 40px !important; }
+
+/* the web table's older dot sizes would otherwise win over the icons */
+table.flow th .dot.ti { width: 19px; height: 19px; margin-right: 7px; vertical-align: -4px; }
+table.flow .cv .tdot.ti { width: 18px; height: 18px; }
 </style>
 </head>
 <body class="locked">

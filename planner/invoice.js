@@ -284,6 +284,7 @@ function renderImport() {
     <p class="hint">Baixe o extrato no app ou site do banco no formato OFX. Cada movimentação é comparada com o que já está no app; nada é lançado até você tocar em Aplicar. Pagamentos de fatura do cartão vêm como Ignorar, porque as compras já estão no cartão.</p>
     ${statementHtml()}</div>`;
   $view.querySelectorAll('.inv-row .money-input').forEach(applyMoneyMask);
+  syncSelectIcons($view); // the statement's type pickers show their type's icon
 }
 
 async function readInvoice(password) {

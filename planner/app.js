@@ -35,6 +35,19 @@ const TICON = Object.fromEntries(Object.entries({
   save: '<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
   card: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
 }).map(([k, d]) => [k, `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`]));
+// A closed select whose chosen option names a type (data-t) shows that type's icon on its left, next to the
+// arrow every select has; the icon is drawn as a background in the type's current colour.
+const CHEVRON_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`;
+function syncSelectIcon(sel) {
+  const o = sel.options[sel.selectedIndex], t = o && o.dataset.t;
+  if (!t) { sel.classList.remove('has-ti'); sel.style.removeProperty('background-image'); return; }
+  const color = getComputedStyle(document.documentElement).getPropertyValue(TYPES[t].color.slice(4, -1)).trim() || '#888';
+  const svg = TICON[t].replace('stroke="currentColor"', `stroke="${color}"`).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+  sel.classList.add('has-ti');
+  sel.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}"), ${CHEVRON_BG}`;
+}
+const syncSelectIcons = root => root.querySelectorAll('select').forEach(syncSelectIcon);
+document.addEventListener('change', e => { if (e.target instanceof HTMLSelectElement) syncSelectIcon(e.target); });
 // the type mark used in lists (where a category would show its colour square)
 const typeMark = t => `<span class="sw ti" style="--c:${TYPES[t].color}">${TICON[t]}</span>`;
 const shortNum = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -1035,6 +1048,7 @@ function openModal(html) {
     if (x) { x.classList.add('modal-x'); x.innerHTML = `<span class="x-icon">✕</span><span class="x-back">${BACK_ICON}<span>Voltar</span></span>`; x.setAttribute('aria-label', 'Fechar'); }
   }
   overlay.classList.add('open');
+  syncSelectIcons(modal);
 }
 function closeModal() { overlay.classList.remove('open'); }
 // forms close only through their own buttons (✕, Cancelar…): a click beside them must not throw away what was typed
