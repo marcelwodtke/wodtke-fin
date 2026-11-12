@@ -467,8 +467,10 @@ function openPickMenu(sel) {
   const menu = document.createElement('div');
   menu.className = 'type-menu pick-menu'; menu.id = 'pickMenu'; menu.setAttribute('role', 'listbox');
   menu.style.minWidth = `${Math.round(Math.max(180, r.width))}px`;
-  menu.innerHTML = opts.map(o => `<button type="button" role="option" aria-selected="${o.selected}" class="tm-opt${o.selected ? ' on' : ''}" data-v="${esc(o.value)}" ${o.disabled ? 'disabled' : ''} style="--c:var(--text)">
-      <span class="tm-name">${esc(o.textContent)}</span>
+  // options with data-c get their colour dot (like the type menu); the others keep the space so names line up
+  const dots = opts.some(o => o.dataset.c);
+  menu.innerHTML = opts.map(o => `<button type="button" role="option" aria-selected="${o.selected}" class="tm-opt${o.selected ? ' on' : ''}" data-v="${esc(o.value)}" ${o.disabled ? 'disabled' : ''} style="--c:${o.dataset.c ? esc(o.dataset.c) : 'var(--text)'}">
+      ${dots ? `<span class="tdot${o.dataset.c ? '' : ' tdot-none'}"></span>` : ''}<span class="tm-name">${esc(o.textContent)}</span>
       <svg class="tm-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></button>`).join('');
   document.body.appendChild(menu);
   // below the field, or above it when there is no room; never wider than the screen
@@ -1265,7 +1267,7 @@ function openDay(k, only) {
       </details></div>`;
   }).join('');
   openModal(`<div class="modal-head"><h2>${(t => t.charAt(0).toUpperCase() + t.slice(1))(r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2><button class="icon-btn" data-act="close">✕</button></div>
-  <div class="modal-body"><div class="field day-filter"><label>Mostrar</label><select id="dayFilter"><option value="">Todos</option>${FLOW_KEYS.map(t => `<option value="${t}" ${t === only ? 'selected' : ''}>${TYPES[t].plural}</option>`).join('')}</select></div>
+  <div class="modal-body"><div class="field day-filter"><label>Mostrar</label><select id="dayFilter"><option value="">Todos</option>${FLOW_KEYS.map(t => `<option value="${t}" data-c="${TYPES[t].color}" ${t === only ? 'selected' : ''}>${TYPES[t].plural}</option>`).join('')}</select></div>
   ${billsHtml}<div class="rows">${items}${skipped}${r.budget && shows('daily') ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !(r.budget && shows('daily')) && !billsHtml ? `<div class="empty-state">${only ? `Nenhum lançamento de ${TYPES[only].plural.toLowerCase()} neste dia.` : 'Nenhum lançamento neste dia.'}</div>` : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
