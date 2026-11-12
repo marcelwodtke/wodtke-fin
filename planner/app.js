@@ -1659,7 +1659,24 @@ document.addEventListener('pointerdown', e => { if (!e.target.closest('.user-men
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeUserMenu(); });
 
 // ---------- offline support (PWA) ----------
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+// The installed app on the iPhone stays suspended in memory instead of reloading, so it would keep running
+// an old version: each time it comes back to the screen it asks for a new sw.js, and reloads once that takes over.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  // only when a previous version was in control (not on the very first install), and not while a popup is open
+  let hadController = !!navigator.serviceWorker.controller, reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; }
+    if (reloading) return;
+    const go = () => { if (reloading) return; reloading = true; location.reload(); };
+    if (!overlay.classList.contains('open')) go();
+    else { const t = setInterval(() => { if (!overlay.classList.contains('open')) { clearInterval(t); go(); } }, 1000); }
+  });
+}
 window.addEventListener('hashchange', () => { if (user) route(); });
 
 // ---------- login ----------
