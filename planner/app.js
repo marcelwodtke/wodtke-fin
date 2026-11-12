@@ -1109,6 +1109,89 @@ function openEntry(date, existing, opts = {}) {
   draw();
 }
 
+// ---------- card invoices: paying part of one, or splitting it into installments ----------
+// the last purchase day that still falls on the invoice due on `due` (its closing day)
+function closingDay(card, due) {
+  for (let d = parse(due), k = 0; k < 62; k++, d = addDays(d, -1)) if (iso(invoiceDue(d, card)) === due) return iso(d);
+  return due;
+}
+const monthOf = due => parse(due).toLocaleDateString('pt-BR', { month: 'long' });
+// each card's invoice total on a due day (refunds and credits already taken off)
+function invoicesOn(r) {
+  const by = new Map();
+  for (const x of r.items) if (x.card) by.set(x.card.id, (by.get(x.card.id) || 0) + x.amt);
+  return [...by].map(([id, total]) => ({ card: state.cards.find(c => c.id === id), total: Math.round(total * 100) / 100 })).filter(v => v.card && v.total > 0);
+}
+function invoiceHead(card, due, total) {
+  return `<p class="hint" style="margin:0 0 12px">Fatura do <b>${esc(card.name)}</b> que vence em ${parse(due).toLocaleDateString('pt-BR')}: <b>${money(total)}</b></p>`;
+}
+// Pay part now: the rest comes off this invoice and goes onto the next one (its interest shows when that invoice is imported)
+function openPartPay(cardId, due, total) {
+  const card = state.cards.find(c => c.id === cardId); if (!card) return;
+  const close = closingDay(card, due), nextDue = iso(invoiceDue(addDays(parse(close), 1), card));
+  openModal(`<div class="modal-head"><h2>Pagar só uma parte</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body">${invoiceHead(card, due, total)}
+    <div class="field"><label>Quanto você pagou (ou vai pagar)</label><input id="ppPaid" class="amount-input money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00"></div>
+    <p class="hint" id="ppHint"></p></div>
+  <div class="modal-foot"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" id="ppSave">Salvar</button></div>`);
+  const field = modal.querySelector('#ppPaid'), hint = modal.querySelector('#ppHint');
+  const sync = () => {
+    const paid = Math.abs(unmaskMoney(field.value)), rest = Math.round((total - paid) * 100) / 100;
+    hint.innerHTML = paid > 0 && rest > 0 ? `Saem da conta agora <b>${money(paid)}</b>. Os <b>${money(rest)}</b> restantes vão para a fatura que vence em ${parse(nextDue).toLocaleDateString('pt-BR')}; os juros aparecem quando você importar essa fatura.` : paid >= total ? 'O valor pago é a fatura inteira: não é preciso fazer nada.' : '';
+  };
+  field.addEventListener('input', sync);
+  modal.querySelector('#ppSave').addEventListener('click', () => {
+    const paid = Math.abs(unmaskMoney(field.value)), rest = Math.round((total - paid) * 100) / 100;
+    if (!(paid > 0) || rest <= 0) return toast('Informe um valor maior que zero e menor que a fatura');
+    const mes = monthOf(due);
+    closeModal();
+    run(() => db.addEntries([
+      { type: 'card', cardId, amount: -rest, date: close, desc: `Fatura de ${mes} paga em parte (pago ${money(paid)})`, repeat: 'none', count: 1, tagId: '' },
+      { type: 'card', cardId, amount: rest, date: iso(addDays(parse(close), 1)), desc: `Saldo da fatura de ${mes} (rotativo)`, repeat: 'none', count: 1, tagId: '' },
+    ]), `${money(rest)} foram para a próxima fatura`);
+  });
+  setTimeout(() => field.focus(), 30);
+}
+// Split the invoice: the down payment leaves now, the rest becomes installments on the next invoices
+function openInstallPlan(cardId, due, total) {
+  const card = state.cards.find(c => c.id === cardId); if (!card) return;
+  const close = closingDay(card, due), nextDue = iso(invoiceDue(addDays(parse(close), 1), card));
+  openModal(`<div class="modal-head"><h2>Parcelar fatura</h2><button class="icon-btn" data-act="close">✕</button></div>
+  <div class="modal-body">${invoiceHead(card, due, total)}
+    <div class="inline"><div class="field"><label>Valor de entrada</label><input id="ipDown" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00"></div>
+      <div class="field"><label>Primeiro vencimento</label><input id="ipFirst" type="date" value="${nextDue}"></div></div>
+    <div class="inline"><div class="field"><label>Quantidade de parcelas</label><input id="ipCount" type="text" inputmode="numeric" value="2"></div>
+      <div class="field"><label>Valor de cada parcela</label><input id="ipEach" class="money-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00"></div></div>
+    <p class="hint" id="ipHint"></p></div>
+  <div class="modal-foot"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" id="ipSave">Salvar</button></div>`);
+  const $ = id => modal.querySelector(id), hint = $('#ipHint');
+  const read = () => {
+    const down = Math.abs(unmaskMoney($('#ipDown').value)), each = Math.abs(unmaskMoney($('#ipEach').value));
+    const n = Math.max(1, Math.min(120, parseInt($('#ipCount').value, 10) || 1)), first = $('#ipFirst').value;
+    // the installments start on the invoice of the chosen month (whatever day was picked)
+    const fd = first ? parse(first) : null, firstDue = fd ? iso(monthDate(fd.getFullYear(), fd.getMonth(), card.due)) : '';
+    return { down, each, n, firstDue, rest: Math.round((total - down) * 100) / 100, plan: Math.round(each * n * 100) / 100 };
+  };
+  const sync = () => {
+    const v = read();
+    hint.innerHTML = v.each > 0 && v.rest > 0 ? `Sai da conta agora: <b>${money(v.down)}</b>. Fica para parcelar: <b>${money(v.rest)}</b>, em <b>${v.n}× ${money(v.each)}</b> = ${money(v.plan)}${v.plan > v.rest ? ` (juros de ${money(v.plan - v.rest)})` : ''}, a partir da fatura de ${v.firstDue ? parse(v.firstDue).toLocaleDateString('pt-BR') : '—'}.` : '';
+  };
+  modal.querySelectorAll('#ipDown, #ipEach, #ipCount, #ipFirst').forEach(el => { el.addEventListener('input', sync); el.addEventListener('change', sync); });
+  $('#ipSave').addEventListener('click', () => {
+    const v = read();
+    if (v.rest <= 0) return toast('A entrada não pode ser a fatura inteira');
+    if (!(v.each > 0)) return toast('Informe o valor de cada parcela');
+    if (!v.firstDue || v.firstDue <= due) return toast('O primeiro vencimento precisa ser depois desta fatura');
+    const mes = monthOf(due);
+    closeModal();
+    run(() => db.addEntries([
+      { type: 'card', cardId, amount: -v.rest, date: close, desc: `Fatura de ${mes} parcelada (entrada ${money(v.down)})`, repeat: 'none', count: 1, tagId: '' },
+      { type: 'card', cardId, amount: v.plan, date: closingDay(card, v.firstDue), desc: `Parcelamento da fatura de ${mes} (${v.n}x ${money(v.each)})`, repeat: v.n > 1 ? 'installments' : 'none', count: v.n, tagId: '' },
+    ]), `Fatura parcelada em ${v.n}x de ${money(v.each)}`);
+  });
+  setTimeout(() => $('#ipDown').focus(), 30);
+}
+
 function openDay(k) {
   const rows = computeRows(parse(k)), r = rows.find(x => x.k === k);
   if (!r) return toast('Data anterior ao ponto de partida');
@@ -1126,8 +1209,12 @@ function openDay(k) {
     <b class="num ${x.e.type === 'in' || x.amt < 0 ? 'pos' : 'neg'}">${x.e.type === 'in' || x.amt < 0 ? '+' : '−'}${money(Math.abs(x.amt))}</b><button class="icon-btn" title="Editar" aria-label="Editar" data-act="editOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.edit}</button><button class="icon-btn icon-del" title="Excluir" aria-label="Excluir" data-act="delOcc" data-id="${x.e.id}" data-od="${x.od}">${ICON.trash}</button></div>`).join('');
   const skipped = (r.skipped || []).map(x => `<div class="row" style="opacity:.6"><span class="sw" style="background:${TYPES[x.e.type].color}"></span><div class="grow"><b style="text-decoration:line-through">${esc(x.e.desc || TYPES[x.e.type].label)}</b>
     <div class="sub">pulado nesta ocorrência${x.n ? ` · parcela ${x.i}/${x.n}` : ''}</div></div><b class="num" style="text-decoration:line-through">${money(x.amt)}</b><button class="btn small" data-act="restoreOcc" data-id="${x.e.id}" data-od="${x.od}">Restaurar</button></div>`).join('');
+  // on a card's due day: its invoice total, with the two ways of not paying it all at once
+  const bills = invoicesOn(r).map(v => `<div class="inv-day"><div class="grow"><b>Fatura ${esc(v.card.name)}</b><div class="sub">vence hoje · ${money(v.total)}</div></div>
+    <button class="btn small" data-act="payPart" data-card="${v.card.id}" data-due="${k}" data-total="${v.total}">Pagar só uma parte</button>
+    <button class="btn small" data-act="payPlan" data-card="${v.card.id}" data-due="${k}" data-total="${v.total}">Parcelar fatura</button></div>`).join('');
   openModal(`<div class="modal-head"><h2>${(t => t.charAt(0).toUpperCase() + t.slice(1))(r.d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2><button class="icon-btn" data-act="close">✕</button></div>
-  <div class="modal-body"><div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
+  <div class="modal-body">${bills}<div class="rows">${items}${skipped}${r.budget ? `<div class="row"><span class="sw" style="background:var(--daily)"></span><div class="grow"><b>Orçamento diário</b><div class="sub">previsão automática</div></div><b class="num neg forecast">−${money(r.budget)}</b></div>` : ''}${!items && !skipped && !r.budget ? '<div class="empty-state">Nenhum lançamento neste dia.</div>' : ''}</div>
   <div class="rows" style="margin-top:10px;border-top:2px solid var(--border)"><div class="row"><div class="grow"><b>Saldo ao fim do dia</b></div><b class="num ${tone(r.bal)}">${money(r.bal)}</b></div></div></div>
   <div class="modal-foot"><button class="btn primary" data-act="addOn" data-day="${k}">+ Lançar neste dia</button></div>`);
 }
@@ -1391,6 +1478,8 @@ document.addEventListener('click', e => {
     case 'type': openEntry.setType(a.dataset.v); break;
     case 'saveEntry': openEntry.submit(); break;
     case 'addOn': openEntry(a.dataset.day); break;
+    case 'payPart': openPartPay(a.dataset.card, a.dataset.due, +a.dataset.total); break;
+    case 'payPlan': openInstallPlan(a.dataset.card, a.dataset.due, +a.dataset.total); break;
     case 'editEntry': { const en = state.entries.find(x => x.id === a.dataset.id); if (en) openEntry(null, en); break; }
     case 'editOcc': case 'delOcc': {
       const en = state.entries.find(x => x.id === a.dataset.id); if (!en) break;

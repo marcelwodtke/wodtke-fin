@@ -567,6 +567,10 @@ input[type="date"]:not([data-native])::-webkit-calendar-picker-indicator, input[
 .inv-close.ok { background: color-mix(in srgb, var(--in) 12%, var(--surface)); color: color-mix(in srgb, var(--in) 70%, var(--text)); }
 .inv-close.gap { background: color-mix(in srgb, var(--daily) 16%, var(--surface)); cursor: pointer; }
 .inv-close input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--primary); }
+
+/* card invoice on its due day, with "pagar só uma parte" / "parcelar" */
+.inv-day { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.inv-day .grow { flex: 1 1 140px; }
 </style>
 </head>
 <body class="locked">
